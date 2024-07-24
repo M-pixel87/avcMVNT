@@ -1,0 +1,60 @@
+#include <Servo.h>
+
+// Create Servo objects for controlling the servos
+Servo wangleServo; //servo that controls the angle the wheel on on 
+Servo motorServo; //servo that controll the speed of the angle
+
+// Variables to store servo positions and input values
+int moveon = 0;  // Variable to control movement (not used in current code)
+int val = 50;    // Initial value to map to servo position
+int pos;         // Mapped position for motor servo
+int i;
+// Uncomment these lines if you want to define min and max pan angles
+//const int panMin = 55;
+//const int panMax = 115;
+
+int positioncrnt = 90;  // Initial position for the wangle servo
+int wheeldegree = 0;    // Degree for wheel servo adjustment
+
+void setup() {
+  // Attach the servos to their respective pins
+  wangleServo.attach(12);
+  motorServo.attach(9);
+
+  // Initialize the wheel angle servo to the center position (90 degrees)
+  wangleServo.write(90);
+
+  // Start serial communication at 9600 baud rate
+  Serial.begin(9600);
+
+  // Set the ESC to the neutral state
+  motorServo.write(90);  // 90 degrees corresponds to a neutral signal (1500 microsecond pulse width)
+  delay(5000);           // Wait for 2 seconds to ensure the ESC recognizes the neutral signal
+}
+
+void loop() {
+  // Map the val (0-100) to servo position (10-180) for motor control
+  val= 58;
+  pos = map(val, 0, 100, 10, 180);//95 is the zero postion of 50 speed
+  motorServo.write(pos);  // Write the mapped position to the motor servo
+  wangleServo.write(115);
+  delay(4000);
+  motorServo.write(90);
+  wangleServo.write(55);
+  motorServo.write(pos);
+  delay(10000);
+  /* Read a string from the serial input until a newline character
+  String value = Serial.readStringUntil('\n');
+  
+  // Convert the string value to an integer
+  int intValue = value.toInt();
+  
+  // Adjust the wheeldegree based on the input value
+  wheeldegree = 90 + intValue;
+  
+  // Write the adjusted wheeldegree to the wangle servo
+  wangleServo.write(wheeldegree);
+  
+  // Wait for 40 milliseconds before the next loop iteration
+  delay(40); */
+}
