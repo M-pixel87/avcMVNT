@@ -1,3 +1,4 @@
+//this code aligns a servo mounted cam to the center of a bucket
 #include <Servo.h>
 
 // Create a Servo object for panning the camera
