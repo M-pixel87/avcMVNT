@@ -1,4 +1,4 @@
-import jetson.inference
+#this program is the genric program ive been using to show the trained model and give out the error
 import jetson.utils
 import time
 import cv2

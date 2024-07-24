@@ -1,14 +1,12 @@
-import jetson.inference
+#this program is the genric program ive been using to show the trained model and give out the error
 import jetson.utils
 import time
 import cv2
 import numpy as np
 import serial
 import Jetson.GPIO as GPIO
+import math
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(8, GPIO.OUT)
-GPIO.output(8, GPIO.LOW)
 
 timeStamp = time.time()
 fpsFilt = 0
@@ -27,7 +25,7 @@ flip = 2
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 # Initialize the serial communication (adjust the port and baud rate as needed)
-ser = serial.Serial('/dev/ttyUSB0', 9600)  # Adjust the serial port and baud rate as needed
+ser = serial.Serial('/dev/ttyTHS0', 9600)  # Adjust the serial port and baud rate as needed
 
 cam = cv2.VideoCapture(0)  # Use 0 for default camera
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, dispW)
@@ -63,10 +61,16 @@ while True:
         errorPan = objx - width / 2 
         # Add your logic here based on object position
         # Example: Print the position
+        zwii = 2
+        eins = 1
         print(f"Object: {item}, Off center by: ({errorPan})")
         if item == 'blue_bucket' and abs(errorPan) > 50:
-            ser.write(f"{int(errorPan)}\n".encode())  # Send errorPan as a string
-
+            rounded_errorPan = math.ceil(errorPan / 22)
+            ser.write(f"{rounded_errorPan}\n".encode())
+            #if errorPan>0:
+            #    ser.write(f"{zwii}\n".encode())
+            #elif errorPan<0:
+            #    ser.write(f"{eins}\n".encode())
     dt = time.time() - timeStamp
     timeStamp = time.time()
     fps = 1 / dt

@@ -1,3 +1,4 @@
+#this is the faster version of lesson54b 
 import jetson.inference
 import jetson.utils
 import time

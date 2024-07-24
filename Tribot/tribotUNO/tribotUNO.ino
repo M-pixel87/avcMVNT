@@ -1,3 +1,4 @@
+//this program takes in the error of the camera and uses that that to alter the pwm of the motors and straightens the bot
 // Define pin numbers for motors
 #define DIR1 4
 #define PWM1 5
