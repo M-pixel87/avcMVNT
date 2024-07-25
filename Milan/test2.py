@@ -1,4 +1,4 @@
-# This program is a generic implementation used to demonstrate the trained model and output the error value.
+# This program demonstrates the trained model and outputs the error value.
 import jetson.utils
 import jetson.inference
 import time
@@ -12,7 +12,7 @@ import math
 timeStamp = time.time()
 fpsFilt = 0
 
-# Load your trained model with the correct paths
+# Load the trained model with the correct paths
 net = jetson.inference.detectNet(
     model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_six/ssd-mobilenet.onnx",
     labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_six/labels.txt",
@@ -39,7 +39,7 @@ while True:
     ret, img = cam.read()
     if not ret:
         break
-    
+
     height = img.shape[0]
     width = img.shape[1]
 
@@ -58,19 +58,42 @@ while True:
         item = net.GetClassDesc(ID)
         w = right - left
         objx = left + (w / 2)
-        
+
         # Draw rectangle and label
         cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 1)
         cv2.putText(img, item, (left, top + 20), font, .75, (0, 0, 255), 2)
 
         # Calculate error in pan
-        errorPan = objx - width / 2 
-        
-        # Example: handle object position and send to serial
-        print(f"Object: {item}, Off center by: ({errorPan}),Width of: {w}")
-        if item == 'blue_bucket' and abs(errorPan) > 50:
-            rounded_errorPan = math.ceil(errorPan / 70)
+        errorPan = objx - width / 2
+
+        # Define enum values for actions
+        Alignmentmv = 1
+        AvoidObstacle = 2
+        Stop = 3
+        Forward = 4
+
+        # Initialize counter for avoided obstacles
+        obsticalsAvoided = 0
+
+        # Handle object position and send to serial
+        print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
+
+        # Alignment action
+        if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324:
+            ser.write(f"{Alignmentmv}\n".encode())
+            rounded_errorPan = math.ceil(errorPan / 15)
             ser.write(f"{rounded_errorPan}\n".encode())
+
+        # Avoid obstacle action
+        if item == 'blue_bucket' and abs(errorPan) < 50 and w < 324 and w > 315:
+            ser.write(f"{AvoidObstacle}\n".encode())
+            obsticalsAvoided += 1
+
+        # Stop action
+        if obsticalsAvoided == 1:
+            ser.write(f"{Stop}\n".encode())
+        else:
+            ser.write(f"{Forward}\n".encode())
 
     # Calculate FPS
     dt = time.time() - timeStamp
@@ -87,4 +110,5 @@ while True:
 
 cam.release()
 cv2.destroyAllWindows()
+
 
