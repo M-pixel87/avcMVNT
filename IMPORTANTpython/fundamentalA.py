@@ -1,3 +1,4 @@
+#this is the one used in most programs seen in this direcectory 
 import jetson.inference
 import jetson.utils
 import time
@@ -6,9 +7,9 @@ import numpy as np
 import serial
 import Jetson.GPIO as GPIO
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(8, GPIO.OUT)
-GPIO.output(8, GPIO.LOW)
+#GPIO.setmode(GPIO.BOARD)
+#GPIO.setup(8, GPIO.OUT)
+#GPIO.output(8, GPIO.LOW)
 
 timeStamp = time.time()
 fpsFilt = 0
@@ -27,7 +28,7 @@ flip = 2
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 # Initialize the serial communication (adjust the port and baud rate as needed)
-ser = serial.Serial('/dev/ttyUSB0', 9600)  # Adjust the serial port and baud rate as needed
+ser = serial.Serial('/dev/ttyTHS0', 9600)  # Adjust the serial port and baud rate as needed
 
 cam = cv2.VideoCapture(0)  # Use 0 for default camera
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, dispW)
