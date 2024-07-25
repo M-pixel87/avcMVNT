@@ -1,3 +1,4 @@
+#this code turns on a light whenever the bucket is a set distance close
 import numpy as np 
 import cv2 
 import Jetson.GPIO as GPIO  # Replace with appropriate GPIO library

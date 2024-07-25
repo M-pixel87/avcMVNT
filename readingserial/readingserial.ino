@@ -1,3 +1,4 @@
+//this code goes in conjuction with IMPORTANTpython verson 1
 void setup() {
   Serial.begin(9600);  // Start serial communication at 9600 baud rate
 }

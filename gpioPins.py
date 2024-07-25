@@ -1,3 +1,4 @@
+#this code is just to test out the gpio pins in case i want to use them
 import Jetson.GPIO as GPIO  # Import the GPIO library for controlling the GPIO pins on the Jetson
 import time  # Import the time library for sleep function
 

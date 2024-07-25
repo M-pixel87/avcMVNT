@@ -1,3 +1,4 @@
+#this code adds a box around a face if found
 import cv2
 
 face_classifier = cv2.CascadeClassifier(
