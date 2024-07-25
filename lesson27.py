@@ -1,4 +1,4 @@
-#This program shows mulitple frames with different masks on them
+#This program shows 5 frames with different masks on them
 import cv2
 print(cv2.__version__)
 import numpy as np

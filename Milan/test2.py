@@ -92,6 +92,8 @@ while True:
         # Stop action
         if obsticalsAvoided == 1:
             ser.write(f"{Stop}\n".encode())
+
+        # Forward action
         else:
             ser.write(f"{Forward}\n".encode())
 
@@ -103,6 +105,8 @@ while True:
 
     # Display FPS
     cv2.putText(img, str(round(fpsFilt, 1)) + ' fps', (0, 30), font, 1, (0, 0, 255), 2)
+
+    #display the frame and set an out switch to leave the progam you have to click on the frame being show and press q on keyboard
     cv2.imshow('detCam', img)
     cv2.moveWindow('detCam', 0, 0)
     if cv2.waitKey(1) == ord('q'):
