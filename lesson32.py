@@ -82,6 +82,7 @@ while True:
                     pan = pan - errorPan / 100
                     ser.write(f"{pan}\n".encode())
                     print(f"Sent: {pan}")
+                    
                 break
 
     cv2.imshow('nanoCam', frame)
