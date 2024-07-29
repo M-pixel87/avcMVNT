@@ -1,4 +1,4 @@
-# This program demonstrates the trained model and outputs the error value.
+# This program demonstrates the trained model and outputs the error value
 import jetson.utils
 import jetson.inference
 import time
