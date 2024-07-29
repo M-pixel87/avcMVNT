@@ -1,31 +1,105 @@
 #include <Servo.h>
 
-// Create a Servo object for panning the camera
-Servo panServo;
-int moveon = 0;  // Added semicolon to end the statement
+// Create Servo objects for controlling the servos
+Servo wangleServo; // Servo that controls the angle the wheel is on
+Servo motorServo;  // Servo that controls the speed of the motor
 
-// Define the pin number for the pan servo
-const int panServoPin = 12;
+// Enum for different actions
+enum RobotAction {
+  Alignmentmv,
+  AvoidObstacle,
+  Stop,
+  Forward,
+  goThroughArch,
+  
+};
 
-//const int panMin = 65;
-//const int panMax = 115;
-int positioncrnt = 90;
-int wheeldegree=0;
+// Function declaration for performing actions based on the enum
+void performAction(RobotAction action);
+
 void setup() {
-  // Attach the servo to the pin
-  panServo.attach(panServoPin);
+  // Attach the servos to their respective pins
+  wangleServo.attach(12);
+  motorServo.attach(9);
 
-  // Initialize the servo to the center position
-  panServo.write(90);
+  // Initialize the wheel angle servo to the center position (90 degrees)
+  wangleServo.write(90);
 
   // Start serial communication at 9600 baud rate
   Serial.begin(9600);
+  Serial1.begin(9600);
+
+  // Set the ESC to the neutral state
+  motorServo.write(90); // 90 degrees corresponds to a neutral signal (1500 microsecond pulse width)
+  delay(5000);          // Wait for 5 seconds to ensure the ESC recognizes the neutral signal
 }
 
 void loop() {
-  String value = Serial.readStringUntil('\n');
-  int intValue = value.toInt();
-  wheeldegree= 90 + intValue;
-  panServo.write(wheeldegree);
-  delay(10);
+  // Example usage: perform different actions based on the received signal
+  if (Serial1.available() > 0) {
+    String value = Serial1.readStringUntil('\n');
+    int action = value.toInt();
+    switch (action) {
+      case 1:
+        performAction(Alignmentmv);
+        break;
+      case 2:
+        performAction(AvoidObstacle);
+        break;
+      case 3:
+        performAction(Stop);
+        break;
+      case 4:
+        performAction(Forward);
+        break;
+      default:
+        break;
+    }
+  }
 }
+
+void performAction(RobotAction action) {
+  switch (action) {
+    case Alignmentmv:
+      if (Serial.available() > 0) {
+        // Perform Alignmentmv action
+        // Read a string from the serial input until a newline character
+        String value = Serial.readStringUntil('\n');
+        // Convert the string value to an integer
+        int intValue = value.toInt();
+        // Adjust the wheeldegree based on the input value
+        int wheeldegree = 90 + intValue;
+        // Write the adjusted wheeldegree to the wangle servo
+        wangleServo.write(wheeldegree);
+        // Wait for 40 milliseconds before the next loop iteration
+        delay(40);
+      }
+      break;
+    case AvoidObstacle:
+      // Perform avoid obstacle action
+      int val = 58;
+      int pos = map(val, 0, 100, 10, 180); // 95 is the zero position of 50 speed
+      motorServo.write(pos);               // Write the mapped position to the motor servo
+      wangleServo.write(115);
+      delay(4000);
+      motorServo.write(90);
+      wangleServo.write(55);
+      motorServo.write(pos);
+      delay(10000);
+      break;
+    case Stop:
+      // Perform stop action
+      motorServo.write(90); // Stop the motor
+      break;
+    case Forward:
+      // Moving forward
+      val = 58;
+      pos = map(val, 0, 100, 10, 180);
+      motorServo.write(pos);
+      wangleServo.write(90);
+      delay(50);
+      break;
+  }
+}
+
+
