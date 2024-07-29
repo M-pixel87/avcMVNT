@@ -1,4 +1,4 @@
-# This program demonstrates the trained model and outputs the error value
+# This program demonstrates the trained model and outputs the error value.
 import jetson.utils
 import jetson.inference
 import time
@@ -7,6 +7,11 @@ import numpy as np
 import serial
 import Jetson.GPIO as GPIO
 import math
+
+#sVal is the value being sent that will need decomposing on the uno side to be useful
+
+
+
 
 # Initialize timestamp and FPS filter
 timeStamp = time.time()
@@ -93,10 +98,10 @@ while True:
         errorPan = objx - width / 2
 
         # Define enum values for actions
-        Alignmentmv = 1
-        AvoidObstacle = 2
-        Stop = 3
-        Advance = 4
+        #Alignmentmv = 150
+        AvoidObstacle = 250
+        Stop = 350
+        #Advance = 450
 
         # Initialize counter for avoided obstacles
         obsticalsAvoided = 0
@@ -106,12 +111,12 @@ while True:
 
         # Alignment action
         if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324:
-            ser.write(f"{Alignmentmv}\n".encode())
             rounded_errorPan = math.ceil(errorPan / 15)
-            ser.write(f"{rounded_errorPan}\n".encode())
+            SVal= rounded_errorPan + 150
+            ser.write(f"{SVal}\n".encode())
 
         # Avoid obstacle action
-        if item == 'blue_bucket' and abs(errorPan) < 50 and w < 324 and w > 315:
+        if item == 'blue_bucket' and abs(errorPan) < 50 and w <= 324 and w > 315:
             ser.write(f"{AvoidObstacle}\n".encode())
             obsticalsAvoided += 1
 
@@ -121,8 +126,6 @@ while True:
 
         # Advance action
         else:
-            ser.write(f"{Advance}\n".encode())
-
             # HSV Tracking for Advance
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
@@ -159,9 +162,10 @@ while True:
                         objX = x + w / 2
                         errorPan = objX - width / 2
                         print(f'ErrorPan: {errorPan}')  # Debugging statement
-                        if abs(errorPan) > 40:
+                        if abs(errorPan) > 50:
                             rounded_errorPan = math.ceil(errorPan / 15)
-                            ser.write(f"{rounded_errorPan}\n".encode())
+                            SVal= rounded_errorPan + 450
+                            ser.write(f"{SVal}\n".encode())
                         break
 
     # Calculate FPS
