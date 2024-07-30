@@ -10,15 +10,14 @@ cv2.namedWindow('Trackbars')
 cv2.moveWindow('Trackbars', 1320, 0)
 
 # Create trackbars for adjusting the HSV range
-cv2.createTrackbar('hueLower', 'Trackbars', 82, 179, nothing)
-cv2.createTrackbar('hueUpper', 'Trackbars', 179, 179, nothing)
-cv2.createTrackbar('hue2Lower', 'Trackbars', 82, 179, nothing)
-cv2.createTrackbar('hue2Upper', 'Trackbars', 179, 179, nothing)
+cv2.createTrackbar('hueLower', 'Trackbars', 0, 179, nothing)
+cv2.createTrackbar('hueUpper', 'Trackbars', 0, 179, nothing)
+cv2.createTrackbar('hue2Lower', 'Trackbars', 89, 179, nothing)
+cv2.createTrackbar('hue2Upper', 'Trackbars', 124, 179, nothing)
 cv2.createTrackbar('satLow', 'Trackbars', 146, 255, nothing)
 cv2.createTrackbar('satHigh', 'Trackbars', 255, 255, nothing)
-cv2.createTrackbar('valLow', 'Trackbars', 64, 255, nothing)
+cv2.createTrackbar('valLow', 'Trackbars', 106, 255, nothing)
 cv2.createTrackbar('valHigh', 'Trackbars', 255, 255, nothing)
-
 # Display settings
 dispW = 640
 dispH = 480
