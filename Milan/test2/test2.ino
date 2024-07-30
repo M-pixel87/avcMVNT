@@ -1,29 +1,31 @@
 #include <Servo.h>
 
 // Create Servo objects for controlling the servos
-Servo steeringServo; // Servo that controls the angle of the wheel
-Servo motorServo;    // Servo that controls the speed of the motor
-
-int defaultSpeed = 58; // Standard speed percentage
+Servo wangleServo; // Servo that controls the angle the wheel is on
+Servo motorServo;  // Servo that controls the speed of the motor
 
 // Enum for different actions
 enum RobotAction {
   Alignmentmv = 1,
   AvoidObstacle = 2,
   Stop = 3,
-  Advance = 4
+  Forward = 4
 };
 
+
+int wheeldegree;
+
+
 // Function declaration for performing actions based on the enum
-void performAction(RobotAction action, int value);
+void performAction(RobotAction action);
 
 void setup() {
   // Attach the servos to their respective pins
-  steeringServo.attach(12);
+  wangleServo.attach(12);
   motorServo.attach(9);
 
-  // Initialize the steering servo to the center position (90 degrees)
-  steeringServo.write(90);
+  // Initialize the wheel angle servo to the center position (90 degrees)
+  wangleServo.write(90);
 
   // Start serial communication at 9600 baud rate
   Serial.begin(9600);
@@ -37,22 +39,19 @@ void loop() {
   // Example usage: perform different actions based on the received signal
   if (Serial.available() > 0) {
     String value = Serial.readStringUntil('\n');
-    int RVal = value.toInt();
-    int action = RVal / 100;
-    int Rnum = RVal % 100 - 50;
-
+    int action = value.toInt();
     switch (action) {
       case Alignmentmv:
-        performAction(Alignmentmv, Rnum);
+        performAction(Alignmentmv);
         break;
       case AvoidObstacle:
-        performAction(AvoidObstacle, Rnum);
+        performAction(AvoidObstacle);
         break;
       case Stop:
-        performAction(Stop, Rnum);
+        performAction(Stop);
         break;
-      case Advance:
-        performAction(Advance, Rnum);
+      case Forward:
+        performAction(Forward);
         break;
       default:
         break;
@@ -60,40 +59,56 @@ void loop() {
   }
 }
 
-void performAction(RobotAction action, int value) {
+void performAction(RobotAction action) {
   switch (action) {
+
+    //ANOTHERCASE  
     case Alignmentmv:
-      // Perform Alignmentmv action
-      int wheeldegree = 90 + value;
-      steeringServo.write(wheeldegree);
-      delay(40);
+      if (Serial.available() > 0) {
+        // Perform Alignmentmv action
+        // Read a string from the serial input until a newline character
+        String value = Serial.readStringUntil('\n');
+        // Convert the string value to an integer
+        int intValue = value.toInt();
+        // Adjust the wheeldegree based on the input value
+        wheeldegree = 90 + intValue;
+        // Write the adjusted wheeldegree to the wangle servo
+        wangleServo.write(wheeldegree);
+        // Wait for 40 milliseconds before the next loop iteration
+        delay(40);
+      }
       break;
 
+    //ANOTHERCASE  
     case AvoidObstacle:
       // Perform avoid obstacle action
       {
-        int pos = map(defaultSpeed, 0, 100, 10, 180); // Assuming 'value' represents a speed percentage
-        motorServo.write(pos);
-        steeringServo.write(115);
+        int val = 58;
+        int pos = map(val, 0, 100, 10, 180); // 95 is the zero position of 50 speed
+        motorServo.write(pos);               // Write the mapped position to the motor servo
+        wangleServo.write(115);
         delay(4000);
         motorServo.write(90);
-        steeringServo.write(55);
+        wangleServo.write(55);
         motorServo.write(pos);
         delay(10000);
       }
       break;
-
+      
+    //ANOTHERCASE  
     case Stop:
       // Perform stop action
       motorServo.write(90); // Stop the motor
       break;
-
-    case Advance:
+      
+    //ANOTHERCASE  
+    case Forward:
       // Moving forward
       {
-        int pos = map(defaultSpeed, 0, 100, 10, 180); // Assuming 'value' represents a speed percentage
+        int val = 58;
+        int pos = map(val, 0, 100, 10, 180);
         motorServo.write(pos);
-        steeringServo.write(90);
+        wangleServo.write(90);
         delay(50);
       }
       break;
