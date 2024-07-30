@@ -1,17 +1,17 @@
-# This program demonstrates the trained model and outputs the error value.
+# This program was built on July 29 and effectively sends commands in a single step.
+# It fixed the issue of needing to send two different commands separately—one for the function
+# and another for the value passed to that function. Now, it combines them into a single command.
+# However, this program has a limitation: it cannot track objects based on color when they are out of sight.
+
 import jetson.utils
 import jetson.inference
 import time
 import cv2
 import numpy as np
 import serial
-import Jetson.GPIO as GPIO
 import math
 
-#sVal is the value being sent that will need decomposing on the uno side to be useful
-
-
-
+# sVal is the value being sent, which will need decomposing on the Arduino side to be useful.
 
 # Initialize timestamp and FPS filter
 timeStamp = time.time()
@@ -27,7 +27,7 @@ net = jetson.inference.detectNet(
     threshold=0.5
 )
 
-# Set display width and height
+# Set display width and height for the camera feed
 dispW = 1280
 dispH = 720
 font = cv2.FONT_HERSHEY_SIMPLEX
@@ -40,32 +40,23 @@ cam = cv2.VideoCapture(0)  # Use 0 for default camera
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, dispW)
 cam.set(cv2.CAP_PROP_FRAME_HEIGHT, dispH)
 
-
-
-
-
-# HSV Tracking Parameters
+# Function for trackbar (does nothing but is required)
 def nothing(x):
     pass
 
+# Create trackbars for HSV color space adjustments
 cv2.namedWindow('Trackbars')
 cv2.moveWindow('Trackbars', 1320, 0)
-
-cv2.createTrackbar('hueLower', 'Trackbars', 82, 179, nothing)
-cv2.createTrackbar('hueUpper', 'Trackbars', 179, 179, nothing)
-cv2.createTrackbar('hue2Lower', 'Trackbars', 82, 179, nothing)
-cv2.createTrackbar('hue2Upper', 'Trackbars', 179, 179, nothing)
-cv2.createTrackbar('satLow', 'Trackbars', 146, 255, nothing)
+cv2.createTrackbar('hueLower', 'Trackbars', 0, 179, nothing)
+cv2.createTrackbar('hueUpper', 'Trackbars', 0, 179, nothing)
+cv2.createTrackbar('hue2Lower', 'Trackbars', 89, 179, nothing)
+cv2.createTrackbar('hue2Upper', 'Trackbars', 124, 179, nothing)
+cv2.createTrackbar('satLow', 'Trackbars', 144, 255, nothing)
 cv2.createTrackbar('satHigh', 'Trackbars', 255, 255, nothing)
-cv2.createTrackbar('valLow', 'Trackbars', 64, 255, nothing)
+cv2.createTrackbar('valLow', 'Trackbars', 106, 255, nothing)
 cv2.createTrackbar('valHigh', 'Trackbars', 255, 255, nothing)
 
-
-
-
-
-
-#this displays the stuff and starts using all the detection styles to find the blue bucket
+# Main loop for object detection and command sending
 while True:
     ret, img = cam.read()
     if not ret:
@@ -90,7 +81,7 @@ while True:
         w = right - left
         objx = left + (w / 2)
 
-        # Draw rectangle and label
+        # Draw rectangle and label on detected object
         cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 1)
         cv2.putText(img, item, (left, top + 20), font, .75, (0, 0, 255), 2)
 
@@ -98,10 +89,8 @@ while True:
         errorPan = objx - width / 2
 
         # Define enum values for actions
-        #Alignmentmv = 150
         AvoidObstacle = 250
         Stop = 350
-        #Advance = 450
 
         # Initialize counter for avoided obstacles
         obsticalsAvoided = 0
@@ -112,7 +101,7 @@ while True:
         # Alignment action
         if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324:
             rounded_errorPan = math.ceil(errorPan / 15)
-            SVal= rounded_errorPan + 150
+            SVal = rounded_errorPan + 150
             ser.write(f"{SVal}\n".encode())
 
         # Avoid obstacle action
@@ -124,9 +113,8 @@ while True:
         if obsticalsAvoided == 1:
             ser.write(f"{Stop}\n".encode())
 
-        # Advance action
+        # Advance action using HSV color tracking
         else:
-            # HSV Tracking for Advance
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
             hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
@@ -155,7 +143,7 @@ while True:
             # Draw contours and bounding box if contours are found
             if contours:
                 for contour in contours:
-                    if cv2.contourArea(contour) > 1000:  # Filter small contours
+                    if cv2.contourArea(contour) > 700:  # Filter small contours
                         x, y, w, h = cv2.boundingRect(contour)
                         x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure these are integers
                         cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 3)
@@ -164,7 +152,7 @@ while True:
                         print(f'ErrorPan: {errorPan}')  # Debugging statement
                         if abs(errorPan) > 50:
                             rounded_errorPan = math.ceil(errorPan / 15)
-                            SVal= rounded_errorPan + 450
+                            SVal = rounded_errorPan + 450
                             ser.write(f"{SVal}\n".encode())
                         break
 
@@ -183,6 +171,7 @@ while True:
     if cv2.waitKey(1) == ord('q'):
         break
 
+# Release the camera and close the serial port
 cam.release()
 cv2.destroyAllWindows()
-ser.close()  # Close the serial port
+ser.close()
