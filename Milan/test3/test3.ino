@@ -1,5 +1,5 @@
 #include <Servo.h>
-
+//Something to note is that this program works with either Jetson orin py test 3 or test 4
 // Create Servo objects for controlling the servos
 Servo steeringServo; // Servo that controls the angle of the wheel
 Servo motorServo;    // Servo that controls the speed of the motor

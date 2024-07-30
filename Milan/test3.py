@@ -1,4 +1,4 @@
-# This program was built on July 29 and effectively sends commands in a single step.
+# This program was built on July 29 2024 and effectively sends commands in a single step.
 # It fixed the issue of needing to send two different commands separately—one for the function
 # and another for the value passed to that function. Now, it combines them into a single command.
 # However, this program has a limitation: it cannot track objects based on color when they are out of sight.
