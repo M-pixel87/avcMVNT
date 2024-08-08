@@ -98,11 +98,12 @@ void performAction(RobotAction action, int value) {
       break;
 
     case Advance:
-      int pos2 = map(defaultSpeed, 0, 100, 10, 180);
-      motorServo.write(pos2);
-      steeringServo.write(90);
-      Serial.println("Advancing...");
-      delay(50);
+      wheeldegree = value + 90; // Assuming value is offset from center (90)
+      filteredWheelDegree = (alpha * wheeldegree) + ((1 - alpha) * filteredWheelDegree);
+      steeringServo.write(filteredWheelDegree);
+      Serial.print("Aligning wheels to: ");
+      Serial.println(filteredWheelDegree);
+      delay(40);
       break;
   }
 }
