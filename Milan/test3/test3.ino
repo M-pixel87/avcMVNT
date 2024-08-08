@@ -1,12 +1,14 @@
 #include <Servo.h>
-//Something to note is that this program works with either Jetson orin py test 3, 4, or 5
+
 // Create Servo objects for controlling the servos
-Servo steeringServo; // Servo that controls the angle of the wheel
-Servo motorServo;    // Servo that controls the speed of the motor
+Servo steeringServo;
+Servo motorServo;
 
-int defaultSpeed = 58; // Standard speed value is very slow and made for testing anything under 90mapped is backwards 
-
+int defaultSpeed = 58;
 int wheeldegree;
+float filteredWheelDegree = 90; // Start with the center position (90 degrees)
+const float alpha = 0.1; // Smoothing factor for the EMA
+
 // Enum for different actions
 enum RobotAction {
   Alignmentmv = 1,
@@ -15,34 +17,24 @@ enum RobotAction {
   Advance = 4
 };
 
-// Function declaration for performing actions based on the enum
 void performAction(RobotAction action, int value);
 
 void setup() {
-  // Attach the servos to their respective pins
   steeringServo.attach(12);
   motorServo.attach(9);
-
-  // Initialize the steering servo to the center position (90 degrees)
   steeringServo.write(90);
-
-  // Start serial communication at 9600 baud rate
   Serial.begin(9600);
-
-  // Set the ESC to the neutral state
-  motorServo.write(90); // 90 degrees corresponds to a neutral signal
-  delay(5000);          // Wait for 5 seconds to ensure the ESC recognizes the neutral signal
-
+  motorServo.write(90);
+  delay(5000);
   Serial.println("Setup complete. Waiting for commands...");
 }
 
 void loop() {
-  // Example usage: perform different actions based on the received signal
   if (Serial.available() > 0) {
     String value = Serial.readStringUntil('\n');
-    int RecievedVal = value.toInt(); //raw received value from UART pin
-    int calACTION = RecievedVal / 100; // Raw value calculated to find action found in transmission
-    int calACTIONAMOUNT = RecievedVal % 100 - 50; // Raw value calculated to find action amount such as the degree to which to turn the wheel
+    int RecievedVal = value.toInt();
+    int calACTION = RecievedVal / 100;
+    int calACTIONAMOUNT = RecievedVal % 100 - 50;
 
     Serial.print("Received value: ");
     Serial.println(RecievedVal);
@@ -80,44 +72,38 @@ void loop() {
 void performAction(RobotAction action, int value) {
   switch (action) {
     case Alignmentmv:
-      // Perform Alignmentmv action
-      wheeldegree = 90 + value;
-      steeringServo.write(wheeldegree);
+      wheeldegree = value + 90; // Assuming value is offset from center (90)
+      filteredWheelDegree = (alpha * wheeldegree) + ((1 - alpha) * filteredWheelDegree);
+      steeringServo.write(filteredWheelDegree);
       Serial.print("Aligning wheels to: ");
-      Serial.println(wheeldegree);
+      Serial.println(filteredWheelDegree);
       delay(40);
       break;
 
     case AvoidObstacle:
-      // Perform avoid obstacle action
-      {
-        int pos = map(defaultSpeed, 0, 100, 10, 180); // Assuming 'value' represents a speed percentage
-        motorServo.write(pos);
-        steeringServo.write(115);
-        Serial.println("Avoiding obstacle...");
-        delay(4000);
-        motorServo.write(90);
-        steeringServo.write(55);
-        motorServo.write(pos);
-        delay(10000);
-      }
+      int pos = map(defaultSpeed, 0, 100, 10, 180);
+      motorServo.write(pos);
+      steeringServo.write(115);
+      Serial.println("Avoiding obstacle...");
+      delay(4000);
+      motorServo.write(90);
+      steeringServo.write(55);
+      motorServo.write(pos);
+      delay(10000);
       break;
 
     case Stop:
-      // Perform stop action
-      motorServo.write(90); // Stop the motor
+      motorServo.write(90);
       Serial.println("Stopping the motor.");
       break;
 
     case Advance:
-      // Moving forward
-      {
-        int pos = map(defaultSpeed, 0, 100, 10, 180); // Assuming 'value' represents a speed percentage
-        motorServo.write(pos);
-        steeringServo.write(90);
-        Serial.println("Advancing...");
-        delay(50);
-      }
+      int pos2 = map(defaultSpeed, 0, 100, 10, 180);
+      motorServo.write(pos2);
+      steeringServo.write(90);
+      Serial.println("Advancing...");
+      delay(50);
       break;
   }
 }
+
