@@ -1,0 +1,24 @@
+When rebooted install these 
+
+VScode for deb arm version
+
+Get Jetpack installed:
+sudo apt update
+sudo apt dist-upgrade
+sudo reboot
+sudo apt install nvidia-jetpack
+
+Get JetsonInference installed
+cd Downloads
+sudo apt-get install git cmake libpython3-dev python3-numpy
+git clone --recursive https://github.com/dusty-nv/jetson-inference
+
+Get a ssh key for git hub
+ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_rsa
+cat ~/.ssh/id_rsa.pub ##copy and paste the output of this
+
+
+Get open cv installed too
+sudo apt install python3-opencv
