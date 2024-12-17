@@ -1,12 +1,15 @@
 #include <Servo.h>
-//Something to note is that this program works with either Jetson orin py test 3, 4, or 5
+
 // Create Servo objects for controlling the servos
 Servo steeringServo; // Servo that controls the angle of the wheel
 Servo motorServo;    // Servo that controls the speed of the motor
 
-int defaultSpeed = 58; // Standard speed value is very slow and made for testing anything under 90mapped is backwards 
+int defaultSpeed = 58; // Standard speed value is very slow and made for testing anything under 90 is backwards 
 
 int wheeldegree;
+float filteredWheelDegree = 90; // Start with the center position (90 degrees)
+const float alpha = 0.1; // Smoothing factor for the EMA, adjust between 0 and 1
+
 // Enum for different actions
 enum RobotAction {
   Alignmentmv = 1,
@@ -81,10 +84,11 @@ void performAction(RobotAction action, int value) {
   switch (action) {
     case Alignmentmv:
       // Perform Alignmentmv action
-      wheeldegree = 90 + value;
-      steeringServo.write(wheeldegree);
+      wheeldegree = value + 90; // Assuming value is offset from center (90)
+      filteredWheelDegree = (alpha * wheeldegree) + ((1 - alpha) * filteredWheelDegree); //alpha: The smoothing factor for the EMA. A value of 0.1 means the filter is fairly smooth. You can adjust this value between 0 and 1 to change the level of smoothing (closer to 0 means more smoothing).
+      steeringServo.write(filteredWheelDegree);
       Serial.print("Aligning wheels to: ");
-      Serial.println(wheeldegree);
+      Serial.println(filteredWheelDegree);
       delay(40);
       break;
 
@@ -110,14 +114,17 @@ void performAction(RobotAction action, int value) {
       break;
 
     case Advance:
-      // Moving forward
+      // Moving forward by only following the color outline in the scope of a blue bucket
       {
-        int pos = map(defaultSpeed, 0, 100, 10, 180); // Assuming 'value' represents a speed percentage
-        motorServo.write(pos);
-        steeringServo.write(90);
-        Serial.println("Advancing...");
-        delay(50);
+      // Perform Alignmentmv action
+      wheeldegree = value + 90; // Assuming value is offset from center (90)
+      filteredWheelDegree = (alpha * wheeldegree) + ((1 - alpha) * filteredWheelDegree); //alpha: The smoothing factor for the EMA. A value of 0.1 means the filter is fairly smooth. You can adjust this value between 0 and 1 to change the level of smoothing (closer to 0 means more smoothing).
+      steeringServo.write(filteredWheelDegree);
+      Serial.print("Aligning wheels to: ");
+      Serial.println(filteredWheelDegree);
+      delay(40);
       }
       break;
   }
 }
+
