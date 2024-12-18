@@ -84,7 +84,7 @@ void performAction(RobotAction action, int value) {
   switch (action) {
     case Alignmentmv:
       // Perform Alignmentmv action
-      wheeldegree = value + 90; // Assuming value is offset from center (90)
+      wheeldegree = 90 - value; // Assuming value is offset from center (90)
       filteredWheelDegree = (alpha * wheeldegree) + ((1 - alpha) * filteredWheelDegree); //alpha: The smoothing factor for the EMA. A value of 0.1 means the filter is fairly smooth. You can adjust this value between 0 and 1 to change the level of smoothing (closer to 0 means more smoothing).
       steeringServo.write(filteredWheelDegree);
       Serial.print("Aligning wheels to: ");
@@ -117,7 +117,8 @@ void performAction(RobotAction action, int value) {
       // Moving forward by only following the color outline in the scope of a blue bucket
       {
       // Perform Alignmentmv action
-      wheeldegree = value + 90; // Assuming value is offset from center (90)
+      motorServo.write(120); // forwards at slowish speed
+      wheeldegree = 90 - value; // Assuming value is offset from center (90)
       filteredWheelDegree = (alpha * wheeldegree) + ((1 - alpha) * filteredWheelDegree); //alpha: The smoothing factor for the EMA. A value of 0.1 means the filter is fairly smooth. You can adjust this value between 0 and 1 to change the level of smoothing (closer to 0 means more smoothing).
       steeringServo.write(filteredWheelDegree);
       Serial.print("Aligning wheels to: ");
