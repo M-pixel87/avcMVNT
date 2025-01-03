@@ -1,5 +1,5 @@
-import jetson.inference
-import jetson.utils
+import jetson.inference #import jetson.inference
+import jetson.utils #import jetson.utils
 import time
 import cv2
 import numpy as np
@@ -11,8 +11,8 @@ timeStamp = time.time()
 fpsFilt = 0
 
 # Load the trained model with the correct paths
-net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_six/ssd-mobilenet.onnx",
-                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_six/labels.txt",
+net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_bone/ssd-mobilenet.onnx",
+                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_bone/labels.txt",
                                  input_blob="input_0",
                                  output_cvg="scores",
                                  output_bbox="boxes",
@@ -89,14 +89,17 @@ while True:
             # Handle object position and send to serial
             print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
 
+
             # Alignment action
             if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324:
                 rounded_errorPan = math.ceil(errorPan / 15)
                 SVal = rounded_errorPan + 150
+                print(f"Value sent: ({SVal})")
+
                 ser.write(f"{SVal}\n".encode())
 
             # Avoid obstacle action
-            if item == 'blue_bucket' and abs(errorPan) < 50 and w <= 324 and w > 315:
+            if item == 'blue_bucket' and w > 315: #part of code taken out abs(errorPan) < 50 and w <= 324 and 
                 ser.write(f"{AvoidObstacle}\n".encode())
                 obsticalsAvoided += 1
 
