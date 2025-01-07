@@ -97,9 +97,11 @@ while True:
                 print(f"Value sent: ({SVal})")
 
                 ser.write(f"{SVal}\n".encode())
+                time.sleep(0.08)  # Wait for 80 milliseconds
+
 
             # Avoid obstacle action
-            if item == 'blue_bucket' and w > 315: #part of code taken out abs(errorPan) < 50 and w <= 324 and 
+            if item == 'blue_bucket' and w > 280: #part of code taken out abs(errorPan) < 50 and w <= 324 and 
                 ser.write(f"{AvoidObstacle}\n".encode())
                 obsticalsAvoided += 1
 
@@ -147,6 +149,8 @@ while True:
                         rounded_errorPan = math.ceil(errorPan / 15)
                         SVal = rounded_errorPan + 450
                         ser.write(f"{SVal}\n".encode())
+                        time.sleep(0.1)  # Wait for 80 milliseconds
+
                     break
 
     # Calculate FPS
