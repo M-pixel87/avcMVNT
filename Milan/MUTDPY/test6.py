@@ -10,9 +10,13 @@ import math
 timeStamp = time.time()
 fpsFilt = 0
 
+
+# Initialize counter for avoided obstacles
+obsticalsAvoided = 0
+
 # Load the trained model with the correct paths
-net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_bone/ssd-mobilenet.onnx",
-                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_bone/labels.txt",
+net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_aone/ssd-mobilenet.onnx",
+                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_aone/labels.txt",
                                  input_blob="input_0",
                                  output_cvg="scores",
                                  output_bbox="boxes",
@@ -83,31 +87,35 @@ while True:
             AvoidObstacle = 250
             Stop = 350
 
-            # Initialize counter for avoided obstacles
-            obsticalsAvoided = 0
+
 
             # Handle object position and send to serial
-            print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
+            #print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}") taken off jan 7 2025 for finshed product debuginge
 
 
             # Alignment action
-            if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324:
+            if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324 and obsticalsAvoided != 1 :
                 rounded_errorPan = math.ceil(errorPan / 15)
                 SVal = rounded_errorPan + 150
                 print(f"Value sent: ({SVal})")
-
                 ser.write(f"{SVal}\n".encode())
                 time.sleep(0.08)  # Wait for 80 milliseconds
 
 
             # Avoid obstacle action
-            if item == 'blue_bucket' and w > 280: #part of code taken out abs(errorPan) < 50 and w <= 324 and 
+            if item == 'blue_bucket' and w > 280 and obsticalsAvoided != 1 : #part of code taken out abs(errorPan) < 50 and w <= 324 and 
                 ser.write(f"{AvoidObstacle}\n".encode())
                 obsticalsAvoided += 1
+                time.sleep(0.08)  # Wait for 80 milliseconds
+                print(f"avoiding obsticale ({obsticalsAvoided})")
+
 
             # Stop action
             if obsticalsAvoided == 1:
                 ser.write(f"{Stop}\n".encode())
+                time.sleep(0.08)  # Wait for 80 milliseconds
+                print(f"stoped ({obsticalsAvoided})")
+
 
     else:
         # HSV Tracking for Advance
@@ -144,12 +152,12 @@ while True:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
                     objX = x + w / 2
                     errorPan = objX - width / 2
-                    print(f'ErrorPan: {errorPan}')  # Debugging statement
-                    if abs(errorPan) > 50:
+                    #print(f'ErrorPan: {errorPan}')  # Debugging statement took of jan 7 2025 to see better 
+                    if abs(errorPan) > 50 and obsticalsAvoided != 1 :
                         rounded_errorPan = math.ceil(errorPan / 15)
                         SVal = rounded_errorPan + 450
                         ser.write(f"{SVal}\n".encode())
-                        time.sleep(0.1)  # Wait for 80 milliseconds
+                        time.sleep(0.08)  # Wait for 80 milliseconds
 
                     break
 
