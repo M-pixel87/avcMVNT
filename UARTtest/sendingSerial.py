@@ -3,11 +3,8 @@ import time
 
 # Initialize the serial communication with the desired settings
 ser = serial.Serial(
-    port='/dev/ttyTHS0',     # Change this to the appropriate port
-    baudrate=9600,           # Baud rate: 9600
-    parity=serial.PARITY_EVEN,  # Set parity to even
-    stopbits=serial.STOPBITS_ONE,  # 1 stop bit
-    bytesize=8,              # 8 data bits
+    port='/dev/ttyACM0',     # Change this to the appropriate port
+    baudrate=9600
 )
 
 AvoidObstacle = 250
