@@ -1,3 +1,6 @@
+#this is the MAIN file used for python and works in conjunction with uno file test 4 found in this milan folder
+#The purpose of this file is to mix color with AI and controll the car
+#prett good but needs work on the AI if using res 512
 import jetson.inference #import jetson.inference
 import jetson.utils #import jetson.utils
 import time
@@ -11,12 +14,14 @@ timeStamp = time.time()
 fpsFilt = 0
 
 
-# Initialize counter for avoided obstacles
-obsticalsAvoided = 0
+# global varibales 
+obsticalsAvoided = 0 #counts if ive evaided already
+previous_error = 0 #used fot he PD poportional and derivitave control the D part
+
 
 # Load the trained model with the correct paths
-net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_aone/ssd-mobilenet.onnx",
-                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_aone/labels.txt",
+net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_done/ssd-mobilenet.onnx",
+                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_done/labels.txt",
                                  input_blob="input_0",
                                  output_cvg="scores",
                                  output_bbox="boxes",
@@ -72,8 +77,8 @@ while True:
             bottom = int(detect.Bottom)
             right = int(detect.Right)
             item = net.GetClassDesc(ID)
-            w = right - left
-            objx = left + (w / 2)
+            w = right - left   #the value being talked about here is the width of the bucket by getting the difference in the right and left pixel postion more right the higher its pixel postion
+            objx = left + (w / 2) #this finds the value of where the obj is centered
 
             # Draw rectangle and label
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 1)
@@ -81,23 +86,32 @@ while True:
             cv2.putText(frame, item, (left, top + 20), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (0, 0, 255), 2)
 
             # Calculate error in pan
-            errorPan = objx - width / 2
+            errorPan = objx - (width / 2) #what this is doing is that it gets the width of the frame and it gets the error amont (negative values corispond with being to the right of the obj and pos the right) 
 
             # Define enum values for actions
             AvoidObstacle = 250
             Stop = 350
 
-
+            
 
             # Handle object position and send to serial
-            #print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}") taken off jan 7 2025 for finshed product debuginge
+            print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}") #taken off jan 7 2025 for finshed product debuginge
+
+
+            # Initialize previous error and constants for PD controller
+            Kp = 0.9  # Proportional gain (adjust for tuning)
+            Kd = 0.1  # Derivative gain (adjust for tuning)
+            delta_error = errorPan - previous_error  # derivaitive
+            previous_error = errorPan #deriviatve past value
 
 
             # Alignment action
-            if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324 and obsticalsAvoided != 1 :
-                rounded_errorPan = math.ceil(errorPan / 15)
+            if item == 'blue_bucket' and abs(errorPan) > 30 and w < 324 and obsticalsAvoided != 1 :#change error pans value for the alignmnet triger it used to be on 50
+                rounded_errorPan = math.ceil(errorPan / 12)
+                if abs(rounded_errorPan) >= 49:  #start of cap for max error thinking servo cap 
+                    rounded_errorPan = 49 * (1 if rounded_errorPan >= 0 else -1)  #end of that cap                 
                 SVal = rounded_errorPan + 150
-                print(f"Value sent: ({SVal})")
+                print(f"Value sent: ({SVal})") 
                 ser.write(f"{SVal}\n".encode())
                 time.sleep(0.08)  # Wait for 80 milliseconds
 
@@ -106,7 +120,7 @@ while True:
             if item == 'blue_bucket' and w > 280 and obsticalsAvoided != 1 : #part of code taken out abs(errorPan) < 50 and w <= 324 and 
                 ser.write(f"{AvoidObstacle}\n".encode())
                 obsticalsAvoided += 1
-                time.sleep(0.08)  # Wait for 80 milliseconds
+                time.sleep(11)  # Wait for 11 seconds
                 print(f"avoiding obsticale ({obsticalsAvoided})")
 
 
@@ -152,7 +166,7 @@ while True:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
                     objX = x + w / 2
                     errorPan = objX - width / 2
-                    #print(f'ErrorPan: {errorPan}')  # Debugging statement took of jan 7 2025 to see better 
+                    print(f'ErrorPan: {errorPan}')  # Debugging statement took of jan 7 2025 to see better 
                     if abs(errorPan) > 50 and obsticalsAvoided != 1 :
                         rounded_errorPan = math.ceil(errorPan / 15)
                         SVal = rounded_errorPan + 450
