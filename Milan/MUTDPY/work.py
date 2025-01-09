@@ -9,8 +9,8 @@ import math
 timeStamp = time.time()
 fpsFilt = 0
 
-net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_done/ssd-mobilenet.onnx",
-                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_done/labels.txt",
+net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_eone/ssd-mobilenet.onnx",
+                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_eone/labels.txt",
                                  input_blob="input_0",
                                  output_cvg="scores",
                                  output_bbox="boxes",
@@ -38,6 +38,12 @@ display = jetson.utils.videoOutput()  # MEOW
 
 # Initialize counter for obstacles
 obsticalsAvoided = 0
+obsticalFLAG = 0
+
+# Define enum values for actions
+AvoidObstacle = 250
+Stop = 350
+
 
 while True:
     img = camera.Capture()
@@ -60,42 +66,46 @@ while True:
             # Draw rectangle and label
             frame = jetson.utils.cudaToNumpy(img)
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-            fontScale = width / 1280  # Adjust font scale based on the width of the window
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 1)
-            cv2.putText(frame, item, (left, top + 20), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (0, 0, 255), 2)
+            fontScale = width / 1280  
+            #cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 1) #i didnt like the red rectangesl so i took them away
+            #cv2.putText(frame, item, (left, top + 20), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (0, 0, 255), 2)  #i didnt like the red rectangesl so i took them away
 
             # Calculate error in pan
             errorPan = objx - width / 2
 
-            # Define enum values for actions
-            AvoidObstacle = 250
-            Stop = 350
+
 
             # Handle object position and send to serial
             print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
 
             # Alignment action
-            if item == 'blue_bucket' and abs(errorPan) > 50 and w < 324:
+            if item == 'blue_bucket' and abs(errorPan) > 50 and obsticalFLAG == 0:
                 rounded_errorPan = math.ceil(errorPan / 15)
                 SVal = rounded_errorPan + 150
                 ser.write(f"{SVal}\n".encode())
+                print(f"AI alignment action, Number sent: ({SVal})")
+
 
             # Avoid obstacle action
-            if item == 'blue_bucket' and w <= 324:
-                ser.write(f"{AvoidObstacle}\n".encode())
-                obsticalsAvoided += 1
+            if item == 'blue_bucket' and obsticalFLAG == 0 and w > 324:
+                #ser.write(f"{AvoidObstacle}\n".encode())
+                obsticalFLAG = 1
+                print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
+
 
             # Stop action
             if obsticalsAvoided == 1:
                 ser.write(f"{Stop}\n".encode())
+                print(f"Stop, Number sent: ({Stop})")
 
-    frame = jetson.utils.cudaToNumpy(img)
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    
-    else:
 
-        
+
+    # If no object is detected, run color-based detection logic
+    if not detections or obsticalFLAG == 1 :
+        frame = jetson.utils.cudaToNumpy(img)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
         hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
         hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
         hue2Low = cv2.getTrackbarPos('hue2Lower', 'Trackbars')
@@ -131,8 +141,15 @@ while True:
                     fontScale = width / 1280  # Adjust font scale based on width of the window
                     if abs(errorPan) > 50:
                         rounded_errorPan = math.ceil(errorPan / 15)
-                        SVal = rounded_errorPan + 450
+                        SVal = rounded_errorPan + 150
                         ser.write(f"{SVal}\n".encode())
+                        print(f"color alignment action, Number sent: ({SVal}), width sent: ({w})")
+
+                    if w > 110 and obsticalsAvoided == 0: 
+                        ser.write(f"{AvoidObstacle}\n".encode())
+                        obsticalsAvoided += 1
+                        print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
+
                     break
 
     # Display the frame and set an out switch to leave the program; you have to click on the frame being shown and press 'q' on the keyboard
