@@ -37,8 +37,10 @@ cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 display = jetson.utils.videoOutput()  # MEOW
 
 # Initialize counter for obstacles
-obsticalsAvoided = 0
-obsticalFLAG = 0
+obsticalsAvoided = 0 #this sets the blue boxes instreas of the AI
+obsticalFLAG = 0    #this keeps track if ive done my menevure
+bluebucket_time = 1 #this keeps track of weather im supposed to be looking for a blue bucket
+yellowbucket_time = 0
 
 # Define enum values for actions
 AvoidObstacle = 250
@@ -78,25 +80,27 @@ while True:
             # Handle object position and send to serial
             print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
 
-            # Alignment action
-            if item == 'blue_bucket' and abs(errorPan) > 50 and obsticalFLAG == 0:
-                rounded_errorPan = math.ceil(errorPan / 15)
-                SVal = rounded_errorPan + 150
-                ser.write(f"{SVal}\n".encode())
-                print(f"AI alignment action, Number sent: ({SVal})")
+            if item == 'blue_bucket' and bluebucket_time == 1 : 
+                # Alignment action
+                if abs(errorPan) > 50 and obsticalFLAG == 0:
+                    rounded_errorPan = math.ceil(errorPan / 15)
+                    SVal = rounded_errorPan + 150
+                    ser.write(f"{SVal}\n".encode())
+                    print(f"AI alignment action, Number sent: ({SVal})")
 
-
-            # Avoid obstacle action
-            if item == 'blue_bucket' and obsticalFLAG == 0 and w > 324:
-                #ser.write(f"{AvoidObstacle}\n".encode())
-                obsticalFLAG = 1
-                print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
+                # Avoid obstacle action
+                if obsticalFLAG == 0 and w > 115:
+                    #ser.write(f"{AvoidObstacle}\n".encode())
+                    obsticalFLAG = 1
+                    print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
 
 
             # Stop action
             if obsticalsAvoided == 1:
                 ser.write(f"{Stop}\n".encode())
                 print(f"Stop, Number sent: ({Stop})")
+
+            
 
 
 
@@ -145,10 +149,15 @@ while True:
                         ser.write(f"{SVal}\n".encode())
                         print(f"color alignment action, Number sent: ({SVal}), width sent: ({w})")
 
-                    if w > 110 and obsticalsAvoided == 0: 
-                        ser.write(f"{AvoidObstacle}\n".encode())
+                    if w > 110 and obsticalFLAG == 1: 
+                        ser.write(f"{AvoidObstacle}\n".encode())             
                         obsticalsAvoided += 1
+                        obsticalFLAG = 0
+                        if obsticalsAvoided == 1: #this was done for the first part of the project so that now im in yellow bucket mode
+                            bluebucket_time = 0
+                            yellowbucket_time = 1
                         print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
+
 
                     break
 
