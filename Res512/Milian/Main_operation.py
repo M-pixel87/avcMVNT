@@ -10,7 +10,7 @@ import math
 timeStamp = time.time()
 fpsFilt = 0
 
-# Initialize the object detection model
+# Initialize the object detection model (for Camera 0)
 net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_fone/ssd-mobilenet.onnx",
                                  labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_fone/labels.txt",
                                  input_blob="input_0",
@@ -18,11 +18,14 @@ net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/py
                                  output_bbox="boxes",
                                  threshold=0.5)
 
-# Initialize serial communication and camera
+# Initialize serial communication and cameras
 ser = serial.Serial('/dev/ttyTHS0', 9600)
-camera = jetson.utils.videoSource("/dev/video0")  
 
-# Create trackbars for color-based detection
+# Initialize video sources for both cameras
+camera = jetson.utils.videoSource("/dev/video0", argv=["--resolution=640x480", "--fps=30"])  # Camera 0 (Object Detection)
+camera2 = jetson.utils.videoSource("/dev/video2", argv=["--resolution=640x480", "--fps=30"])  # Camera 1 (Color Detection only)
+
+# Create trackbars for color-based detection (for both cameras)
 def nothing(x):
     pass
 
@@ -43,35 +46,28 @@ cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 # Initialize display object
 display = jetson.utils.videoOutput()
 
-# Initialize counters and flags
-obsticalsAvoided = 0  # Counts obstacles avoided
-obsticalFLAG = 0      # Flags if maneuver has been done
-bluebucket_time = 1   # Flag if looking for blue bucket
-yellowbucket_time = 0 # Flag if looking for yellow bucket
-
 # Define action codes
 AvoidObstacle = 250
 Stop = 350
 
+# Initialize pan value
+pan = 0  # Initialize pan variable
+
 while True:
-    # Capture an image from the camera
+    # Process the first camera (Camera 0: Object Detection + Color Detection)
     img = camera.Capture()
+    width = img.width
+    # Convert to numpy array for OpenCV processing
+    frame = jetson.utils.cudaToNumpy(img)
+    frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
 
-    # Always define 'frame' to be the same as 'img'
-    frame = jetson.utils.cudaToNumpy(img)  # Convert to numpy array for OpenCV processing
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)  # Convert to BGR format for OpenCV
-
-    # Perform object detection on the captured image
+    # Perform object detection on Camera 0
     detections = net.Detect(img)
     
     # Render the image to the display
     display.Render(img)
     
-    # Get the width and height of the image
-    width = img.width
-    height = img.height
-
-    # Check if any objects were detected
+    # Check if any objects were detected on Camera 0
     if detections:
         for detect in detections:
             ID = detect.ClassID
@@ -84,90 +80,99 @@ while True:
             objx = left + (w / 2)
 
             # Calculate error in pan (center alignment)
-            errorPan = objx - width / 2
+            errorPan = objx - img.width / 2
 
             print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
 
-            # If we detect the blue bucket and it's time to act
-            if item == 'blue_bucket' and bluebucket_time == 1:
-                # Alignment action (if object is off-center)
-                if abs(errorPan) > 50 and obsticalFLAG == 0:
-                    rounded_errorPan = math.ceil(errorPan / 15)
-                    SVal = rounded_errorPan + 150
-                    ser.write(f"{SVal}\n".encode())
-                    print(f"AI alignment action, Number sent: ({SVal})")
+            # Additional logic based on detected objects
+            # Example: Avoid obstacles or send commands via serial
+            if item == 'blue_bucket' and w > 311:
+                # Implement avoidance logic
+                ser.write(f"{AvoidObstacle}\n".encode())
+                print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
+                # Perform further actions as needed
 
-                # Avoid obstacle if detected and not yet maneuvered
-                if obsticalFLAG == 0 and w > 311:
-                    ser.write(f"{AvoidObstacle}\n".encode())
-                    obsticalsAvoided = 1
-                    print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
+    # Color Detection for Camera 0 (on top of Object Detection)
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
+    hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
+    hue2Low = cv2.getTrackbarPos('hue2Lower', 'Trackbars')
+    hue2Up = cv2.getTrackbarPos('hue2Upper', 'Trackbars')
+    Ls = cv2.getTrackbarPos('satLow', 'Trackbars')
+    Us = cv2.getTrackbarPos('satHigh', 'Trackbars')
+    Lv = cv2.getTrackbarPos('valLow', 'Trackbars')
+    Uv = cv2.getTrackbarPos('valHigh', 'Trackbars')
 
-            # Stop action if obstacle has been avoided
-            if obsticalsAvoided == 1:
-                ser.write(f"{Stop}\n".encode())
-                print(f"Stop, Number sent: ({Stop})")
+    # Define lower and upper bounds for color mask
+    l_b = np.array([hueLow, Ls, Lv])
+    u_b = np.array([hueUp, Us, Uv])
+    l_b2 = np.array([hue2Low, Ls, Lv])
+    u_b2 = np.array([hue2Up, Us, Uv])
+    
+    # Create color masks
+    FGmask = cv2.inRange(hsv, l_b, u_b)
+    FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
+    FGmaskComp = cv2.add(FGmask, FGmask2)
 
-    # If no object detected, or obstacle avoidance completed, process color detection
-    if not detections or obsticalFLAG == 1:
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    cv2.imshow('FGmaskComp', FGmaskComp)
 
-        # Read trackbar positions
-        hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
-        hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
-        hue2Low = cv2.getTrackbarPos('hue2Lower', 'Trackbars')
-        hue2Up = cv2.getTrackbarPos('hue2Upper', 'Trackbars')
-        Ls = cv2.getTrackbarPos('satLow', 'Trackbars')
-        Us = cv2.getTrackbarPos('satHigh', 'Trackbars')
-        Lv = cv2.getTrackbarPos('valLow', 'Trackbars')
-        Uv = cv2.getTrackbarPos('valHigh', 'Trackbars')
-        
-        # Define lower and upper bounds for color mask
-        l_b = np.array([hueLow, Ls, Lv])
-        u_b = np.array([hueUp, Us, Uv])
-        l_b2 = np.array([hue2Low, Ls, Lv])
-        u_b2 = np.array([hue2Up, Us, Uv])
-        
-        # Create color masks
-        FGmask = cv2.inRange(hsv, l_b, u_b)
-        FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
-        FGmaskComp = cv2.add(FGmask, FGmask2)
+    contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        cv2.imshow('FGmaskComp', FGmaskComp)
+    # Process color contours
+    if contours:
+        for contour in contours:
+            if cv2.contourArea(contour) > 700:  # Filter out small contours
+                x, y, w, h = cv2.boundingRect(contour)
+                x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure integer values for rectangle
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)  # Draw rectangle around object
+                objX = x + w / 2  # Calculate object's center X-coordinate
+                errorPan = objX - width / 2  # Calculate error in pan
+                print(f'Width of object: {w}')  # Print error value for debugging
+                if abs(errorPan) > 40:  # If the error is significant
+                    pan = pan - errorPan / 100  # Adjust pan value
+                    ser.write(f"{pan}\n".encode())  # Send pan value via UART
+                    #print(f"Sent: {pan}")  # Print the sent pan value
+                break  # Process only the first large contour
 
-        contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Process the second camera (Camera 1: Only Color Detection)
+    img2 = camera2.Capture()
 
-        # If contours are found, process them
-        if contours:
-            for contour in contours:
-                if cv2.contourArea(contour) > 700:  # Filter out small contours
-                    x, y, w, h = cv2.boundingRect(contour)
-                    x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure integer values
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
-                    objX = x + w / 2
-                    errorPan = objX - width / 2
-                    print(f'ErrorPan: {errorPan}')  # Debugging statement
+    # Convert to numpy array for OpenCV processing
+    frame2 = jetson.utils.cudaToNumpy(img2)
+    frame2 = cv2.cvtColor(frame2, cv2.COLOR_RGBA2BGR)
 
-                    # Handle alignment action
-                    if abs(errorPan) > 50:
-                        rounded_errorPan = math.ceil(errorPan / 15)
-                        SVal = rounded_errorPan + 150
-                        ser.write(f"{SVal}\n".encode())
-                        print(f"Color alignment action, Number sent: ({SVal}), width sent: ({w})")
+    # Color Detection for Camera 1
+    hsv2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2HSV)
+    l_b2 = np.array([90, 157, 140]) #logis hue lower satlower value lower
+    u_b2 = np.array([179, 255, 215]) #logis  hue higher sat higher value higher
+    FGmask2 = cv2.inRange(hsv2, l_b2, u_b2)
+    FGmaskComp2 = FGmask2  # Avoid redundant addition to FGmaskComp
 
-                    # Avoid obstacle if detected and not yet maneuvered
-                    if w > 110 and obsticalFLAG == 1:
-                        ser.write(f"{AvoidObstacle}\n".encode())
-                        obsticalsAvoided += 1
-                        obsticalFLAG = 0
-                        if obsticalsAvoided == 1:
-                            bluebucket_time = 0
-                            yellowbucket_time = 1
-                        print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
-                    break
+    cv2.imshow('FGmaskComp2', FGmaskComp2)
 
-    # Display the frame and exit the program if 'q' is pressed
+    contours2, _ = cv2.findContours(FGmaskComp2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Process color contours on Camera 1
+    if contours2:
+        for contour in contours2:
+            if cv2.contourArea(contour) > 700:  # Filter out small contours
+                x, y, w, h = cv2.boundingRect(contour)
+                x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure integer values for rectangle
+                cv2.rectangle(frame2, (x, y), (x + w, y + h), (255, 0, 0), 3)  # Draw rectangle around object
+                objX = x + w / 2  # Calculate object's center X-coordinate
+                errorPan = objX - width / 2  # Calculate error in pan
+                print(f'Width of object: {w}')  # Print error value for debugging
+                if abs(errorPan) > 40:  # If the error is significant
+                    pan = pan - errorPan / 100  # Adjust pan value
+                    ser.write(f"{pan}\n".encode())  # Send pan value via UART
+                    #print(f"Sent: {pan}")  # Print the sent pan value
+                break  # Process only the first large contour
+
+    # Display the frames
     cv2.imshow('detCam', frame)
+    cv2.imshow('detCam2', frame2)
+
+    # Exit if 'q' is pressed
     if cv2.waitKey(1) == ord('q'):
         break
 
@@ -176,5 +181,6 @@ while True:
 
 # Clean up
 camera.Close()
+camera2.Close()
 cv2.destroyAllWindows()
 ser.close()  # Close the serial port

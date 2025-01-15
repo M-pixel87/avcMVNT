@@ -1,14 +1,9 @@
-# This program is designed to align a camera with a blue object.
-# The primary use of this program is to adjust the parameters for detecting the correct shade of blue (or any other color) 
-# by modifying the HSV (Hue, Saturation, Value) range.
-# Additionally, it allows you to determine the optimal width of the object, 
-# which is useful when using the static "avoid" function to track or avoid obstacles.
-
-
 import cv2
 import numpy as np
-import serial  
+import serial
+import time
 
+# Setup Serial Communication
 ser = serial.Serial('/dev/ttyTHS0', 9600)
 
 def nothing(x):
@@ -29,13 +24,16 @@ dispW = 640
 dispH = 480  
 flip = 2  
 
-
+# Setup Camera and Reduce Resolution
 cam = cv2.VideoCapture(0)
-width = cam.get(cv2.CAP_PROP_FRAME_WIDTH)
-height = cam.get(cv2.CAP_PROP_FRAME_HEIGHT)
-print('width:', width, 'height:', height)  
+cam.set(cv2.CAP_PROP_FRAME_WIDTH, dispW)  # Reduce resolution to speed up processing
+cam.set(cv2.CAP_PROP_FRAME_HEIGHT, dispH)
+width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+print('width:', width, 'height:', height)
 
 pan = 0
+last_pan_sent = time.time()
 
 while True:
     ret, frame = cam.read()
@@ -59,12 +57,12 @@ while True:
     l_b2 = np.array([hue2Low, Ls, Lv])
     u_b2 = np.array([hue2Up, Us, Uv])
 
+    # Combine masks
     FGmask = cv2.inRange(hsv, l_b, u_b)
     FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
-    FGmaskComp = cv2.add(FGmask, FGmask2)
+    FGmaskComp = cv2.bitwise_or(FGmask, FGmask2)  # Efficient combining of masks
 
     cv2.imshow('FGmaskComp', FGmaskComp)  # Display the combined mask
-    cv2.moveWindow('FGmaskComp', 0, 530)  # Position the mask window
 
     contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -78,15 +76,18 @@ while True:
                 objX = x + w / 2  # Calculate object's center X-coordinate
                 errorPan = objX - width / 2  # Calculate error in pan
                 print(f'Width of object: {w}')  # Print error value for debugging
-                #print(f'ErrorPan: {errorPan}')  # Print error value for debugging
+
                 if abs(errorPan) > 40:  # If the error is significant
                     pan = pan - errorPan / 100  # Adjust pan value
-                    ser.write(f"{pan}\n".encode())  # Send pan value via UART
-                    #print(f"Sent: {pan}")  # Print the sent pan value
+                    
+                    # Only send the pan value if enough time has passed (e.g., every 0.1 seconds)
+                    if time.time() - last_pan_sent > 0.1:
+                        ser.write(f"{pan}\n".encode())  # Send pan value via UART
+                        last_pan_sent = time.time()  # Update the last time pan was sent
+
                 break  # Process only the first large contour
 
     cv2.imshow('nanoCam', frame)  # Display the frame with detected object
-    cv2.moveWindow('nanoCam', 0, 0)  # Position the video feed window
 
     if cv2.waitKey(1) == ord('q'):  # Exit loop if 'q' is pressed
         break
