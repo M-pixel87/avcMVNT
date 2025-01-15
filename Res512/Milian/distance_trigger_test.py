@@ -81,15 +81,11 @@ while True:
             if item == 'blue_bucket' and bluebucket_time == 1 : 
 
                 # Avoid obstacle action
-                if obsticalFLAG == 0 and w > 115:
+                if w > 115:
                     #ser.write(f"{AvoidObstacle}\n".encode())
                     obsticalFLAG = 1
-
-
-            # Stop action
-            if obsticalsAvoided == 1:
-                ser.write(f"{Stop}\n".encode())
-
+                if w < 115:
+                    obsticalFLAG = 0
             
 
 
@@ -133,15 +129,16 @@ while True:
                     errorPan = objX - width / 2
                     fontScale = width / 1280  # Adjust font scale based on width of the window
 
-                    if w > 110 and obsticalFLAG == 1: 
+                    if w > 128 : 
                         ser.write(f"{AvoidObstacle}\n".encode())             
                         obsticalFLAG = 0
                         if obsticalsAvoided == 0: #this was done for the first part of the project so that now im in yellow bucket mode
-                            bluebucket_time = 0
-                            yellowbucket_time = 1
                             obsticalsAvoided = 1
-                    if w < 110 : 
+                        print(f'width of object1: {w}')  # Debugging statement
+
+                    if w < 128 : 
                             obsticalsAvoided = 0
+                            print(f'width of object2: {w}')  # Debugging statement
 
                     break
 

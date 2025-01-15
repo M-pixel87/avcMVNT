@@ -6,19 +6,23 @@ import numpy as np
 import serial
 import math
 
+# Constants
 timeStamp = time.time()
 fpsFilt = 0
 
-net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_eone/ssd-mobilenet.onnx",
-                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_eone/labels.txt",
+# Initialize the object detection model
+net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_fone/ssd-mobilenet.onnx",
+                                 labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_fone/labels.txt",
                                  input_blob="input_0",
                                  output_cvg="scores",
                                  output_bbox="boxes",
                                  threshold=0.5)
 
+# Initialize serial communication and camera
 ser = serial.Serial('/dev/ttyTHS0', 9600)
 camera = jetson.utils.videoSource("/dev/video0")  
 
+# Create trackbars for color-based detection
 def nothing(x):
     pass
 
@@ -31,29 +35,43 @@ cv2.createTrackbar('satLow', 'Trackbars', 146, 255, nothing)
 cv2.createTrackbar('satHigh', 'Trackbars', 255, 255, nothing)
 cv2.createTrackbar('valLow', 'Trackbars', 106, 255, nothing)
 cv2.createTrackbar('valHigh', 'Trackbars', 255, 255, nothing)
+
+# Initialize windows for display
 cv2.namedWindow('detCam', cv2.WINDOW_NORMAL)
 cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 
-display = jetson.utils.videoOutput()  # MEOW
+# Initialize display object
+display = jetson.utils.videoOutput()
 
-# Initialize counter for obstacles
-obsticalsAvoided = 0 #this sets the blue boxes instreas of the AI
-obsticalFLAG = 0    #this keeps track if ive done my menevure
-bluebucket_time = 1 #this keeps track of weather im supposed to be looking for a blue bucket
-yellowbucket_time = 0
+# Initialize counters and flags
+obsticalsAvoided = 0  # Counts obstacles avoided
+obsticalFLAG = 0      # Flags if maneuver has been done
+bluebucket_time = 1   # Flag if looking for blue bucket
+yellowbucket_time = 0 # Flag if looking for yellow bucket
 
-# Define enum values for actions
+# Define action codes
 AvoidObstacle = 250
 Stop = 350
 
-
 while True:
+    # Capture an image from the camera
     img = camera.Capture()
+
+    # Always define 'frame' to be the same as 'img'
+    frame = jetson.utils.cudaToNumpy(img)  # Convert to numpy array for OpenCV processing
+    frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)  # Convert to BGR format for OpenCV
+
+    # Perform object detection on the captured image
     detections = net.Detect(img)
+    
+    # Render the image to the display
     display.Render(img)
+    
+    # Get the width and height of the image
     width = img.width
     height = img.height
 
+    # Check if any objects were detected
     if detections:
         for detect in detections:
             ID = detect.ClassID
@@ -65,51 +83,36 @@ while True:
             w = right - left
             objx = left + (w / 2)
 
-            # Draw rectangle and label
-            frame = jetson.utils.cudaToNumpy(img)
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-            fontScale = width / 1280  
-            #cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 1) #i didnt like the red rectangesl so i took them away
-            #cv2.putText(frame, item, (left, top + 20), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (0, 0, 255), 2)  #i didnt like the red rectangesl so i took them away
-
-            # Calculate error in pan
+            # Calculate error in pan (center alignment)
             errorPan = objx - width / 2
 
-
-
-            # Handle object position and send to serial
             print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
 
-            if item == 'blue_bucket' and bluebucket_time == 1 : 
-                # Alignment action
+            # If we detect the blue bucket and it's time to act
+            if item == 'blue_bucket' and bluebucket_time == 1:
+                # Alignment action (if object is off-center)
                 if abs(errorPan) > 50 and obsticalFLAG == 0:
                     rounded_errorPan = math.ceil(errorPan / 15)
                     SVal = rounded_errorPan + 150
                     ser.write(f"{SVal}\n".encode())
                     print(f"AI alignment action, Number sent: ({SVal})")
 
-                # Avoid obstacle action
-                if obsticalFLAG == 0 and w > 115:
-                    #ser.write(f"{AvoidObstacle}\n".encode())
-                    obsticalFLAG = 1
+                # Avoid obstacle if detected and not yet maneuvered
+                if obsticalFLAG == 0 and w > 311:
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    obsticalsAvoided = 1
                     print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
 
-
-            # Stop action
+            # Stop action if obstacle has been avoided
             if obsticalsAvoided == 1:
                 ser.write(f"{Stop}\n".encode())
                 print(f"Stop, Number sent: ({Stop})")
 
-            
-
-
-
-    # If no object is detected, run color-based detection logic
-    if not detections or obsticalFLAG == 1 :
-        frame = jetson.utils.cudaToNumpy(img)
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+    # If no object detected, or obstacle avoidance completed, process color detection
+    if not detections or obsticalFLAG == 1:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
+        # Read trackbar positions
         hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
         hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
         hue2Low = cv2.getTrackbarPos('hue2Lower', 'Trackbars')
@@ -119,11 +122,13 @@ while True:
         Lv = cv2.getTrackbarPos('valLow', 'Trackbars')
         Uv = cv2.getTrackbarPos('valHigh', 'Trackbars')
         
+        # Define lower and upper bounds for color mask
         l_b = np.array([hueLow, Ls, Lv])
         u_b = np.array([hueUp, Us, Uv])
         l_b2 = np.array([hue2Low, Ls, Lv])
         u_b2 = np.array([hue2Up, Us, Uv])
         
+        # Create color masks
         FGmask = cv2.inRange(hsv, l_b, u_b)
         FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
         FGmaskComp = cv2.add(FGmask, FGmask2)
@@ -132,43 +137,44 @@ while True:
 
         contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # Draw contours and bounding box if contours are found
+        # If contours are found, process them
         if contours:
             for contour in contours:
-                if cv2.contourArea(contour) > 700:  # Filter small contours
+                if cv2.contourArea(contour) > 700:  # Filter out small contours
                     x, y, w, h = cv2.boundingRect(contour)
-                    x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure these are integers
+                    x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure integer values
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
                     objX = x + w / 2
                     errorPan = objX - width / 2
                     print(f'ErrorPan: {errorPan}')  # Debugging statement
-                    fontScale = width / 1280  # Adjust font scale based on width of the window
+
+                    # Handle alignment action
                     if abs(errorPan) > 50:
                         rounded_errorPan = math.ceil(errorPan / 15)
                         SVal = rounded_errorPan + 150
                         ser.write(f"{SVal}\n".encode())
-                        print(f"color alignment action, Number sent: ({SVal}), width sent: ({w})")
+                        print(f"Color alignment action, Number sent: ({SVal}), width sent: ({w})")
 
-                    if w > 110 and obsticalFLAG == 1: 
-                        ser.write(f"{AvoidObstacle}\n".encode())             
+                    # Avoid obstacle if detected and not yet maneuvered
+                    if w > 110 and obsticalFLAG == 1:
+                        ser.write(f"{AvoidObstacle}\n".encode())
                         obsticalsAvoided += 1
                         obsticalFLAG = 0
-                        if obsticalsAvoided == 1: #this was done for the first part of the project so that now im in yellow bucket mode
+                        if obsticalsAvoided == 1:
                             bluebucket_time = 0
                             yellowbucket_time = 1
                         print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
-
-
                     break
 
-    # Display the frame and set an out switch to leave the program; you have to click on the frame being shown and press 'q' on the keyboard
+    # Display the frame and exit the program if 'q' is pressed
     cv2.imshow('detCam', frame)
     if cv2.waitKey(1) == ord('q'):
         break
 
-    # Display the FPS in the status bar
+    # Display the FPS on the status bar
     display.SetStatus("Object Detection | Network {:.0f} FPS".format(net.GetNetworkFPS()))
 
-camera.Close()  # Close the camera
+# Clean up
+camera.Close()
 cv2.destroyAllWindows()
 ser.close()  # Close the serial port
