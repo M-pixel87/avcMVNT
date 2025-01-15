@@ -5,7 +5,7 @@ Servo steeringServo; // Servo that controls the angle of the wheel
 Servo motorServo;    // Servo that controls the speed of the motor
 
 int defaultSpeed = 58; // Standard speed value is very slow and made for testing anything under 90 is backwards 
-
+const int ledPin = 3;    // Pin to which the LED is connected
 int wheeldegree;
 float filteredWheelDegree = 90; // Start with the center position (90 degrees)
 const float alpha = 0.1; // Smoothing factor for the EMA, adjust between 0 and 1
@@ -22,6 +22,8 @@ enum RobotAction {
 void performAction(RobotAction action, int value);
 
 void setup() {
+
+  pinMode(ledPin, OUTPUT);
   // Attach the servos to their respective pins
   steeringServo.attach(12);
   motorServo.attach(9);
@@ -98,12 +100,14 @@ void performAction(RobotAction action, int value) {
         //int pos = map(defaultSpeed, 0, 100, 10, 180); // Assuming 'value' represents a speed percentage
         motorServo.write(115);
         steeringServo.write(115);
+        digitalWrite(ledPin, HIGH);  // Turn on the LED
         Serial.println("Avoiding obstacle...");
         delay(2000);
         motorServo.write(115);
         steeringServo.write(55);
         //motorServo.write(pos);
         delay(9000);
+        digitalWrite(ledPin, LOW);   // Turn off the LED
       }
       break;
 

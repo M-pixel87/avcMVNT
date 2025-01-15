@@ -1,57 +1,64 @@
-# This program aligns a camera with a blue object of a specific shade
-# by sending control commands through a UART pin.
-
+import jetson.utils
+import time
 import cv2
 import numpy as np
-import serial  # Import the serial library for UART communication
+import serial
+import math
 
-# Initialize serial communication with the UART port
+# Constants
+timeStamp = time.time()
+fpsFilt = 0
+
+# Initialize serial communication and camera
 ser = serial.Serial('/dev/ttyTHS0', 9600)
+camera = jetson.utils.videoSource("/dev/video0")  
 
+# Create trackbars for color-based detection
 def nothing(x):
-    pass  # Placeholder function for trackbar callbacks
+    pass
 
-# Create a window for trackbars and position it
-cv2.namedWindow('Trackbars')
-cv2.moveWindow('Trackbars', 1320, 0)
-
-# Create trackbars to adjust the HSV range for blue object detection
-cv2.createTrackbar('hueLower', 'Trackbars', 82, 179, nothing)
-cv2.createTrackbar('hueUpper', 'Trackbars', 179, 179, nothing)
-cv2.createTrackbar('hue2Lower', 'Trackbars', 82, 179, nothing)
-cv2.createTrackbar('hue2Upper', 'Trackbars', 179, 179, nothing)
+cv2.namedWindow('Trackbars', cv2.WINDOW_NORMAL)
+cv2.createTrackbar('hueLower', 'Trackbars', 0, 179, nothing)
+cv2.createTrackbar('hueUpper', 'Trackbars', 0, 179, nothing)
+cv2.createTrackbar('hue2Lower', 'Trackbars', 89, 179, nothing)
+cv2.createTrackbar('hue2Upper', 'Trackbars', 124, 179, nothing)
 cv2.createTrackbar('satLow', 'Trackbars', 146, 255, nothing)
 cv2.createTrackbar('satHigh', 'Trackbars', 255, 255, nothing)
-cv2.createTrackbar('valLow', 'Trackbars', 64, 255, nothing)
+cv2.createTrackbar('valLow', 'Trackbars', 106, 255, nothing)
 cv2.createTrackbar('valHigh', 'Trackbars', 255, 255, nothing)
 
-dispW = 640  # Display width
-dispH = 480  # Display height
-flip = 2  # Flip method for the camera (if using Pi Camera)
+# Initialize windows for display
+cv2.namedWindow('detCam', cv2.WINDOW_NORMAL)
+cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 
-# Uncomment the lines below if using a Raspberry Pi Camera
-# camSet = 'nvarguscamerasrc ! video/x-raw(memory:NVMM), width=3264, height=2464, format=NV12, framerate=21/1 ! nvvidconv flip-method=' + str(flip) + ' ! video/x-raw, width=' + str(dispW) + ', height=' + str(dispH) + ', format=BGRx ! videoconvert ! video/x-raw, format=BGR ! appsink'
-# cam = cv2.VideoCapture(camSet)
+# Initialize display object
+display = jetson.utils.videoOutput()
 
-# If using a USB webcam, uncomment the next line
-# If it does not work, try changing '0' to '1'
-cam = cv2.VideoCapture(0)
-width = cam.get(cv2.CAP_PROP_FRAME_WIDTH)
-height = cam.get(cv2.CAP_PROP_FRAME_HEIGHT)
-print('width:', width, 'height:', height)  # Print camera resolution
+# Initialize counters and flags
+obsticalsAvoided = 0  # Counts obstacles avoided
+obsticalFLAG = 0      # Flags if maneuver is primed
+bluebucket_time = 1   # Flag if looking for blue bucket
+yellowbucket_time = 0 # Flag if looking for yellow bucket
 
-# Initialize the pan variable
-pan = 0
+# Define action codes
+AvoidObstacle = 250
+Stop = 350
+
+# FPS calculation
+prev_frame_time = 0
+new_frame_time = 0
 
 while True:
-    ret, frame = cam.read()
-    if not ret:
-        print("Failed to capture image")
-        break  # Exit loop if image capture fails
+    # Capture an image from the camera
+    img = camera.Capture()
 
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)  # Convert frame to HSV color space
+    # Always define 'frame' to be the same as 'img'
+    frame = jetson.utils.cudaToNumpy(img)  # Convert to numpy array for OpenCV processing
+    frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)  # Convert to BGR format for OpenCV
 
-    # Retrieve trackbar positions for HSV range
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Read trackbar positions
     hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
     hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
     hue2Low = cv2.getTrackbarPos('hue2Lower', 'Trackbars')
@@ -60,57 +67,82 @@ while True:
     Us = cv2.getTrackbarPos('satHigh', 'Trackbars')
     Lv = cv2.getTrackbarPos('valLow', 'Trackbars')
     Uv = cv2.getTrackbarPos('valHigh', 'Trackbars')
-
-    # Define lower and upper bounds for blue color
+    
+    # Define lower and upper bounds for color mask
     l_b = np.array([hueLow, Ls, Lv])
     u_b = np.array([hueUp, Us, Uv])
     l_b2 = np.array([hue2Low, Ls, Lv])
     u_b2 = np.array([hue2Up, Us, Uv])
-
-    # Create masks for detecting blue objects within the specified HSV range
+    
+    # Create color masks
     FGmask = cv2.inRange(hsv, l_b, u_b)
     FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
     FGmaskComp = cv2.add(FGmask, FGmask2)
 
-    cv2.imshow('FGmaskComp', FGmaskComp)  # Display the combined mask
-    cv2.moveWindow('FGmaskComp', 0, 530)  # Position the mask window
+    cv2.imshow('FGmaskComp', FGmaskComp)
 
     contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # If contours are found, process them
     if contours:
         for contour in contours:
-            if cv2.contourArea(contour) > 1000:  # Filter out small contours
+            if cv2.contourArea(contour) > 700:  # Filter out small contours
                 x, y, w, h = cv2.boundingRect(contour)
-                x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure integer values for rectangle
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)  # Draw rectangle around object
-                objX = x + w / 2  # Calculate object's center X-coordinate
-                errorPan = objX - width / 2
+                x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure integer values
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
+                
+                objX = x + w / 2
+                errorPan = objX - frame.shape[1] / 2  # Use frame's width for calculation
                 print(f'ErrorPan: {errorPan}')  # Debugging statement
-                fontScale = width / 1280  # Adjust font scale based on width of the window
-                if abs(errorPan) > 50:
+
+                # Handle alignment action (check if the object is not too close or too far)
+                if abs(errorPan) > 50 and w > 20 and w < 110 and obsticalsAvoided==0 :  # Validate if object size is within range
+                    # Avoid extreme object size variations
                     rounded_errorPan = math.ceil(errorPan / 15)
                     SVal = rounded_errorPan + 150
                     ser.write(f"{SVal}\n".encode())
-                    print(f"color alignment action, Number sent: ({SVal}), width sent: ({w})")
+                    print(f"Color alignment action, Number sent: ({SVal}), width sent: ({w}), abstacoles avoided: ({AvoidObstacle})")
 
-                if w > 110: 
-                    ser.write(f"{AvoidObstacle}\n".encode())             
-                    obsticalsAvoided = 1
-                    obsticalFLAG = 0
-                    if obsticalsAvoided == 1: #this was done for the first part of the project so that now im in yellow bucket mode
+                # Avoid obstacle if detected and not yet maneuvered
+                if w > 110 and obsticalFLAG == 0 :
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    ser.write(f"{AvoidObstacle}\n".encode())
+                    obsticalsAvoided += 1
+                    obsticalFLAG = 1
+                    if obsticalsAvoided == 1:
                         bluebucket_time = 0
                         yellowbucket_time = 1
                     print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
-                break  # Process only the first large contour
+                break
 
-    cv2.imshow('nanoCam', frame)  # Display the frame with detected object
-    cv2.moveWindow('nanoCam', 0, 0)  # Position the video feed window
+                if obsticalFLAG==1:
+                    ser.write(f"{Stop}\n".encode())
+                    print(f"Stop, Number sent: ({Stop})")
 
-    if cv2.waitKey(1) == ord('q'):  # Exit loop if 'q' is pressed
+
+
+
+    # FPS calculation
+    new_frame_time = time.time()
+    fps = 1 / (new_frame_time - prev_frame_time)
+    prev_frame_time = new_frame_time
+
+    # Display the FPS on the status bar
+    display.SetStatus("FPS: {:.0f}".format(fps))
+
+    # Display the frame and exit the program if 'q' is pressed
+    cv2.imshow('detCam', frame)
+    if cv2.waitKey(1) == ord('q'):
         break
 
-# Release the camera and close all OpenCV windows
-cam.release()
+# Clean up
+camera.Close()
 cv2.destroyAllWindows()
 ser.close()  # Close the serial port
