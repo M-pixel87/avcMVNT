@@ -5,9 +5,11 @@ LIDARLite_v4LED myLidarLite;
 #define FAST_I2C
 float distance;
 byte lidarLiteAddress = 0x62;
+const int ledPin = 2;  // Pin thatll eiethr be a 1 or 0 and its a trigger
 
 void setup()
 {
+  pinMode(ledPin, OUTPUT);  // Set the ledPin as an OUTPUT
   // Initialize Arduino serial port
   Serial.begin(115200);
   // Initialize Arduino I2C (for communication to LidarLite)
@@ -44,6 +46,14 @@ void loop()
     myLidarLite.takeRange();
     // Read new distance data from device registers
     distance = myLidarLite.readDistance();
+    if (distance <= 170 )
+    {
+        digitalWrite(ledPin, HIGH);  // Triggered
+      }
+    else{
+        digitalWrite(ledPin, LOW);  // No trigger
+
+      }
   }
   
   Serial.print("Sensor distance: ");
