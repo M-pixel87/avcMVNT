@@ -1,3 +1,6 @@
+#this code is my most mighty fine code ive made and its import to remember the orienation of the cameras 
+#the eleco rect looking one belongs on the top usb fnt port and other one on the bottom 
+
 import jetson.inference
 import jetson.utils
 import time
@@ -5,6 +8,12 @@ import cv2
 import numpy as np
 import serial
 import math
+
+from adafruit_servokit import ServoKit # this a recent servo lib that i brought
+myKit=ServoKit(channels=16)
+myKit.servo[0].angle=110
+myKit.servo[1].angle=0
+xaxiscam = 110
 
 # Constants
 timeStamp = time.time()
@@ -119,7 +128,7 @@ while True:
     contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Process color contours
-    if contours:
+    if not detections and contours:
         for contour in contours:
             if cv2.contourArea(contour) > 700:  # Filter out small contours
                 x, y, w, h = cv2.boundingRect(contour)
@@ -163,9 +172,12 @@ while True:
                 errorPan = objX - width / 2  # Calculate error in pan
                 print(f'Width of object: {w}')  # Print error value for debugging
                 if abs(errorPan) > 40:  # If the error is significant
-                    pan = pan - errorPan / 100  # Adjust pan value
-                    ser.write(f"{pan}\n".encode())  # Send pan value via UART
-                    #print(f"Sent: {pan}")  # Print the sent pan value
+                    if errorPan > 0 and xaxiscam < 180:
+                        xaxiscam += 1
+                     elif errorPan < 0 and xaxiscam > 0:
+                        xaxiscam -= 1 
+                    myKit.servo[3].angle = xaxiscam
+                    print(f"xaxiscam value is: {xaxiscam}")  # Print the x axis angle
                 break  # Process only the first large contour
 
     # Display the frames
