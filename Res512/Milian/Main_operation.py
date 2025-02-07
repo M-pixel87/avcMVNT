@@ -8,8 +8,12 @@ import cv2
 import numpy as np
 import serial
 import math
-
+import Jetson.GPIO as GPIO  # Import the GPIO library for controlling the GPIO pins on the Jetson
 from adafruit_servokit import ServoKit # this a recent servo lib that i brought
+
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(7, GPIO.IN)  # Set up the pin as an input pin
+
 myKit=ServoKit(channels=16)
 myKit.servo[0].angle=110
 myKit.servo[1].angle=0
@@ -55,14 +59,31 @@ cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 # Initialize display object
 display = jetson.utils.videoOutput()
 
+steeringServoVal=0
+pastSteeringServoVal =0
+onbutton=0
+
 # Define action codes
 AvoidObstacle = 250
 Stop = 350
+Dconstant = .5
+Pconstant = 1
 
 # Initialize pan value
 pan = 0  # Initialize pan variable
 
-while True:
+while onbutton==0:
+    buttonstate_state = GPIO.input(7)
+    if buttonstate_state == GPIO.HIGH:
+        print("Input pin is HIGH")
+        onbutton = 1
+    else:
+        print("Input pin is LOW")
+        myKit.servo[1].angle = 90
+    time.sleep(1)  # Wait for 1 second before checking the pin again
+
+
+while True and onbutton==1:
     # Process the first camera (Camera 0: Object Detection + Color Detection)
     img = camera.Capture()
     width = img.width
@@ -87,19 +108,22 @@ while True:
             item = net.GetClassDesc(ID)
             w = right - left
             objx = left + (w / 2)
-
-            # Calculate error in pan (center alignment)
             errorPan = objx - img.width / 2
-
             print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
-
-            # Additional logic based on detected objects
-            # Example: Avoid obstacles or send commands via serial
-            if item == 'blue_bucket' and w > 311:
-                # Implement avoidance logic
-                ser.write(f"{AvoidObstacle}\n".encode())
-                print(f"Avoid obstacle, Number sent: ({AvoidObstacle})")
-                # Perform further actions as needed
+            if item == 'blue_bucket' and abs(errorPan) > 50 :
+                errorPan = math.ceil(errorPan / 15)
+                steeringServoVal = Pconstant * (90 - errorPan) - Dconstant * ((steeringServoVal - pastSteeringServoVal) / 2)
+                myKit.servo[0].angle = steeringServoVal
+                pastSteeringServoVal= steeringServoVal
+            buttonstate_state = GPIO.input(7)
+            if buttonstate_state == GPIO.LOW:
+                #i need to start that evaiding action now servo 0 is streeing and 1 is esc
+                myKit.servo[0].angle = 123#make it so that im turning left
+                myKit.servo[1].angle = 115#set the speed to
+                time.sleep(3)  # Wait for 3 second 
+                myKit.servo[0].angle = 55#make it so that im turning right
+                time.sleep(9)  # Wait for 9 seconds
+                
 
     # Color Detection for Camera 0 (on top of Object Detection)
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -138,9 +162,18 @@ while True:
                 errorPan = objX - width / 2  # Calculate error in pan
                 print(f'Width of object: {w}')  # Print error value for debugging
                 if abs(errorPan) > 40:  # If the error is significant
-                    pan = pan - errorPan / 100  # Adjust pan value
-                    ser.write(f"{pan}\n".encode())  # Send pan value via UART
-                    #print(f"Sent: {pan}")  # Print the sent pan value
+                    errorPan = math.ceil(errorPan / 15)
+                    steeringServoVal = Pconstant * (90 - errorPan) - Dconstant * ((steeringServoVal - pastSteeringServoVal) / 2)
+                    myKit.servo[0].angle = steeringServoVal
+                    pastSteeringServoVal= steeringServoVal
+                buttonstate_state = GPIO.input(7)
+                if buttonstate_state == GPIO.LOW:
+                    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
+                    myKit.servo[0].angle = 123#make it so that im turning left
+                    myKit.servo[1].angle = 115#set the speed to
+                    time.sleep(3)  # Wait for 3 second 
+                    myKit.servo[0].angle = 55#make it so that im turning right
+                    time.sleep(9)  # Wait for 9 seconds
                 break  # Process only the first large contour
 
     # Process the second camera (Camera 1: Only Color Detection)
@@ -174,11 +207,17 @@ while True:
                 if abs(errorPan) > 40:  # If the error is significant
                     if errorPan > 0 and xaxiscam < 180:
                         xaxiscam += 1
-                     elif errorPan < 0 and xaxiscam > 0:
+                    elif errorPan < 0 and xaxiscam > 0:
                         xaxiscam -= 1 
                     myKit.servo[3].angle = xaxiscam
                     print(f"xaxiscam value is: {xaxiscam}")  # Print the x axis angle
                 break  # Process only the first large contour
+    
+
+
+
+
+        
 
     # Display the frames
     cv2.imshow('detCam', frame)
