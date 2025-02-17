@@ -11,8 +11,8 @@ import math
 import Jetson.GPIO as GPIO  # Import the GPIO library for controlling the GPIO pins on the Jetson
 from adafruit_servokit import ServoKit # this a recent servo lib that i brought
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(7, GPIO.IN)  # Set up the pin as an input pin
+#GPIO.setmode(GPIO.BOARD)  this was shown to be called already with high probability of adafruit calling it
+GPIO.setup('GPIO11', GPIO.IN)  # Set up the pin as an input pin which is pin 21 for now
 
 myKit=ServoKit(channels=16)
 myKit.servo[0].angle=110
@@ -73,7 +73,7 @@ Pconstant = 1
 pan = 0  # Initialize pan variable
 
 while onbutton==0:
-    buttonstate_state = GPIO.input(7)
+    buttonstate_state = GPIO.input('GPIO11')
     if buttonstate_state == GPIO.HIGH:
         print("Input pin is HIGH")
         onbutton = 1
@@ -115,7 +115,7 @@ while True and onbutton==1:
                 steeringServoVal = Pconstant * (90 - errorPan) - Dconstant * ((steeringServoVal - pastSteeringServoVal) / 2)
                 myKit.servo[0].angle = steeringServoVal
                 pastSteeringServoVal= steeringServoVal
-            buttonstate_state = GPIO.input(7)
+            buttonstate_state = GPIO.input('GPIO11')
             if buttonstate_state == GPIO.LOW:
                 #i need to start that evaiding action now servo 0 is streeing and 1 is esc
                 myKit.servo[0].angle = 123#make it so that im turning left
@@ -166,7 +166,7 @@ while True and onbutton==1:
                     steeringServoVal = Pconstant * (90 - errorPan) - Dconstant * ((steeringServoVal - pastSteeringServoVal) / 2)
                     myKit.servo[0].angle = steeringServoVal
                     pastSteeringServoVal= steeringServoVal
-                buttonstate_state = GPIO.input(7)
+                buttonstate_state = GPIO.input('GPIO11')
                 if buttonstate_state == GPIO.LOW:
                     #i need to start that evaiding action now servo 0 is streeing and 1 is esc
                     myKit.servo[0].angle = 123#make it so that im turning left
