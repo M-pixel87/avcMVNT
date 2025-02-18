@@ -1,40 +1,40 @@
-//this code aligns a servo mounted cam to the center of a bucket
+// How this is read:
+// - Bring in the library to control the default frequency/PWM mapping for servos and create an object that uses it.
+// - Declare my variables, including using PWM pin 10 for the servo.
+// - Set pan max and min as a precaution—sometimes the servo makes noises if maxed out.
+// - Create a variable for the current position, which will update with input.  
+//   - This also doubles as the initial position (90 degrees), since the range is 0-180.  
+// - For those new to the Uno: `void setup()` is the initial code that runs once.  
+
+// Inside `setup()`:
+// - Attach the servo object to pin 10, which basically handles the math for converting my input into an output position.
+// - Move the servo to the center position (90 degrees) with the first write to pin 10.  
+// - The value I’m sending is in ASCII, followed by `\n`, so `incomingDeg.trim();` removes the `\n` at the end.
+// - After that:  
+//   - If the value is "1" (ASCII), turn right.  
+//   - If the value is "2" (ASCII), turn left.  
+
+// The rest of the code is just for debugging and adding a delay to prevent jittering or moving the servo too fast.  
+// Author MM
+
 #include <Servo.h>
-
-// Create a Servo object for panning the camera
 Servo panServo;
-int moveon = 0;  // Added semicolon to end the statement
 
-// Define the pin number for the pan servo
 const int panServoPin = 10;
-
-// Define the initial and movement range for the pan servo
-const int initialPanPosition = 90;  // Center position (0-180 degrees)
 const int panMin = 0;
 const int panMax = 180;
 int positioncrnt = 90;
 
 void setup() {
-  // Attach the servo to the pin
   panServo.attach(panServoPin);
-
-  // Initialize the servo to the center position
-  panServo.write(initialPanPosition);
-
-  // Start serial communication at 9600 baud rate
+  panServo.write(positioncrnt);
   Serial.begin(9600);
 }
 
 void loop() {
-  // Check if data is available on the serial port
   while (Serial.available() > 0) {
-    // Read the incoming string until a newline character
     String incomingDeg = Serial.readStringUntil('\n');
-    
-    // Trim any leading or trailing whitespace
     incomingDeg.trim();
-
-    // Update the position based on the incoming degree value
     if (incomingDeg == "1" && positioncrnt < panMax) {
       positioncrnt++;
     } else if (incomingDeg == "2" && positioncrnt > panMin) {
@@ -44,10 +44,7 @@ void loop() {
     Serial.print("Received number: ");
     Serial.println(incomingDeg);
     Serial.println(positioncrnt);
-    
-    // Write the new position to the servo
     panServo.write(positioncrnt);
-    delay(10);  // Small delay to avoid overwhelming the serial buffer
+    delay(10); 
   }
 
-  // This line will always execute, incrementing `moveon` continuously if no serial data is available

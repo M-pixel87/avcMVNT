@@ -1,18 +1,19 @@
+// This code is designed to output a '1' if an object in front of the sensor is too close. It’s up to the Orin to handle that trigger and decide how to respond.
+// If the detected object is a blue bucket, the Orin will take care of moving the servo accordingly.
+// This part of the code simply detects when an object is close, as you requested.
+
 #include <Wire.h>
 #include "LIDARLite_v4LED.h"
 LIDARLite_v4LED myLidarLite;
-
 #define FAST_I2C
 float distance;
 byte lidarLiteAddress = 0x62;
-const int ledPin = 2;  // Pin thatll eiethr be a 1 or 0 and its a trigger
+const int ledPin = 2;  
 
 void setup()
 {
-  pinMode(ledPin, OUTPUT);  // Set the ledPin as an OUTPUT
-  // Initialize Arduino serial port
+  pinMode(ledPin, OUTPUT);  
   Serial.begin(115200);
-  // Initialize Arduino I2C (for communication to LidarLite)
   Wire.begin();
   
   // Set I2C frequency to 400kHz for compatible boards (e.g., Arduino Due)
@@ -42,9 +43,7 @@ void loop()
 {
   if (myLidarLite.getBusyFlag() == 0)
   {
-    // Trigger the next range measurement
     myLidarLite.takeRange();
-    // Read new distance data from device registers
     distance = myLidarLite.readDistance();
     if (distance <= 170 )
     {
