@@ -1,3 +1,10 @@
+#the reading of this pythong file is as goes
+#In the import section im bringing in revalenent libs for our project jetson.(i and u) are libs that have cuda tools for capturing imgs and 
+#using ai in our file and time gives me pre set function that count time could be from counting from a crystal osilatora and the amount of periods passed
+#Ill skip the rest as itll be understood in the file 
+#delclare my vars incldued in this file i have a fps text box so ive add a fps text to see how much the ai is slowing down my system
+#
+
 import jetson.inference
 import jetson.utils
 import time
@@ -7,10 +14,6 @@ import serial
 import Jetson.GPIO as GPIO
 
 
-timeStamp = time.time()
-fpsFilt = 0
-
-# Load your trained model with the correct paths
 net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_six/ssd-mobilenet.onnx",
                                  labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_six/labels.txt",
                                  input_blob="input_0",
@@ -18,15 +21,18 @@ net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/py
                                  output_bbox="boxes",
                                  threshold=0.5)
 
+
+
+timeStamp = time.time()
+fpsFilt = 0
 dispW = 1280
 dispH = 720
 flip = 2
 font = cv2.FONT_HERSHEY_SIMPLEX
-
-# Initialize the serial communication (adjust the port and baud rate as needed)
-ser = serial.Serial('/dev/ttyTHS0', 9600)  # Adjust the serial port and baud rate as needed
-
-cam = cv2.VideoCapture(0)  # Use 0 for default camera
+zwii = 2
+eins = 1
+ser = serial.Serial('/dev/ttyTHS0', 9600)  
+cam = cv2.VideoCapture(0)  
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, dispW)
 cam.set(cv2.CAP_PROP_FRAME_HEIGHT, dispH)
 
@@ -51,17 +57,9 @@ while True:
         item = net.GetClassDesc(ID)
         w = right - left
         objx = left + (w / 2)
-        
-        # Draw rectangle and label
         cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 1)
         cv2.putText(img, item, (left, top + 20), font, .75, (0, 0, 255), 2)
-
-        # Example: handle object position
         errorPan = objx - width / 2 
-        # Add your logic here based on object position
-        # Example: Print the position
-        zwii = 2
-        eins = 1
         print(f"Object: {item}, Off center by: ({errorPan})")
         if item == 'blue_bucket' and abs(errorPan) > 50:
             if errorPan>0:

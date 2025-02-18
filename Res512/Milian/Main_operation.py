@@ -35,8 +35,8 @@ net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/py
 ser = serial.Serial('/dev/ttyTHS0', 9600)
 
 # Initialize video sources for both cameras
-camera = jetson.utils.videoSource("/dev/video0", argv=["--resolution=640x480", "--fps=30"])  # Camera 0 (Object Detection)
-camera2 = jetson.utils.videoSource("/dev/video2", argv=["--resolution=640x480", "--fps=30"])  # Camera 1 (Color Detection only)
+camera = jetson.utils.videoSource("/dev/video0", argv=["--resolution=1280x720", "--fps=30"])  # Camera 0 (Object Detection)
+camera2 = jetson.utils.videoSource("/dev/video2", argv=["--resolution=1280x720", "--fps=30"])  # Camera 1 (Color Detection only)
 
 # Create trackbars for color-based detection (for both cameras)
 def nothing(x):
