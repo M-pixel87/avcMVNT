@@ -22,7 +22,7 @@ GPIO.setup('GP49_SPI1_MOSI', GPIO.IN) #kk chat i think it phyisical pin 19 # Set
 
 myKit=ServoKit(channels=16)
 myKit.servo[3].angle=110
-myKit.servo[2].angle=0
+myKit.servo[2].angle=90
 myKit.servo[1].angle=90 #hold the no mvmnt pwm
 myKit.servo[0].angle=90 #hold the center wheels
 xaxiscam = 110
@@ -43,8 +43,8 @@ net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/py
 ser = serial.Serial('/dev/ttyTHS0', 9600)
 
 # Initialize video sources for both cameras
-camera = jetson.utils.videoSource("/dev/video0", argv=["--resolution=640x480", "--fps=30"]) 
-camera2 = jetson.utils.videoSource("/dev/video2", argv=["--resolution=640x480", "--fps=30"])
+camera = jetson.utils.videoSource("/dev/video2", argv=["--resolution=640x480", "--fps=30"]) 
+camera2 = jetson.utils.videoSource("/dev/video0", argv=["--resolution=640x480", "--fps=30"])
 
 # Create trackbars for color-based detection (for both cameras)
 def nothing(x):
@@ -80,19 +80,19 @@ Pconstant = 1
 # Initialize pan value
 pan = 0  # Initialize pan variable
 
-while onbutton==0:
-    buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-    if buttonstate_state == GPIO.HIGH:
-        print("Input pin is HIGH! MVMNT start")
-        onbutton = 1
-        myKit.servo[1].angle=115 #start the movement
-    else:
-        print("Input pin is LOW dont move yet")
-        myKit.servo[1].angle = 90
-    time.sleep(1)  # Wait for 1 second before checking the pin again
+#while onbutton==0:
+#    buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
+#    if buttonstate_state == GPIO.HIGH:
+#        print("Input pin is HIGH! MVMNT start")
+#        onbutton = 1
+#        myKit.servo[1].angle=115 #start the movement
+#    else:
+#        print("Input pin is LOW dont move yet")
+#        myKit.servo[1].angle = 90
+#    time.sleep(1)  # Wait for 1 second before checking the pin again
 
 
-while True and onbutton==1:
+while True :#and onbutton==1:
     # Process the first camera (Camera 0: Object Detection + Color Detection)
     img = camera.Capture()
     width = img.width
@@ -125,13 +125,13 @@ while True and onbutton==1:
                 myKit.servo[0].angle = steeringServoVal
                 pastSteeringServoVal= steeringServoVal
             buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-            if buttonstate_state == GPIO.LOW:
-                #i need to start that evaiding action now servo 0 is streeing and 1 is esc
-                myKit.servo[0].angle = 123#make it so that im turning left
-                myKit.servo[1].angle = 115#set the speed to
-                time.sleep(3)  # Wait for 3 second 
-                myKit.servo[0].angle = 55#make it so that im turning right
-                time.sleep(9)  # Wait for 9 seconds
+            #if buttonstate_state == GPIO.LOW:
+            #    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
+            #    myKit.servo[0].angle = 123#make it so that im turning left
+            #    myKit.servo[1].angle = 115#set the speed to
+            #    time.sleep(3)  # Wait for 3 second 
+            #    myKit.servo[0].angle = 55#make it so that im turning right
+            #    time.sleep(9)  # Wait for 9 seconds
                 
 
     # Color Detection for Camera 0 (on top of Object Detection)
@@ -176,13 +176,13 @@ while True and onbutton==1:
                     myKit.servo[0].angle = steeringServoVal
                     pastSteeringServoVal= steeringServoVal
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-                if buttonstate_state == GPIO.LOW:
-                    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
-                    myKit.servo[0].angle = 123#make it so that im turning left
-                    myKit.servo[1].angle = 115#set the speed to
-                    time.sleep(3)  # Wait for 3 second 
-                    myKit.servo[0].angle = 55#make it so that im turning right
-                    time.sleep(9)  # Wait for 9 seconds
+                #if buttonstate_state == GPIO.LOW :
+                #    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
+                #    myKit.servo[0].angle = 123#make it so that im turning left
+                #    myKit.servo[1].angle = 115#set the speed to
+                #    time.sleep(3)  # Wait for 3 second 
+                #    myKit.servo[0].angle = 55#make it so that im turning right
+                #    time.sleep(9)  # Wait for 9 seconds
                 break  # Process only the first large contour
 
     # Process the second camera (Camera 1: Only Color Detection)
