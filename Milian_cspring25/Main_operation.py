@@ -11,12 +11,20 @@ import math
 import Jetson.GPIO as GPIO  # Import the GPIO library for controlling the GPIO pins on the Jetson
 from adafruit_servokit import ServoKit # this a recent servo lib that i brought
 
+
+#servo3 is for xaxis cam
+#servo2 is for yaxis cam
+#servo1 is for speed controll
+#servo0 is for direction control
+
 #GPIO.setmode(GPIO.BOARD)  this was shown to be called already with high probability of adafruit calling it
 GPIO.setup('GP49_SPI1_MOSI', GPIO.IN) #kk chat i think it phyisical pin 19 # Set up the pin as an input pin which is pin 21 for now //newestupdate i found the data sheet and i think 'GP49_SPI1_MOSI' is the right spelling of SPI1_MISO
 
 myKit=ServoKit(channels=16)
-myKit.servo[0].angle=110
-myKit.servo[1].angle=0
+myKit.servo[3].angle=110
+myKit.servo[2].angle=0
+myKit.servo[1].angle=90 #hold the no mvmnt pwm
+myKit.servo[0].angle=90 #hold the center wheels
 xaxiscam = 110
 
 # Constants
@@ -75,10 +83,11 @@ pan = 0  # Initialize pan variable
 while onbutton==0:
     buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
     if buttonstate_state == GPIO.HIGH:
-        print("Input pin is HIGH")
+        print("Input pin is HIGH! MVMNT start")
         onbutton = 1
+        myKit.servo[1].angle=115 #start the movement
     else:
-        print("Input pin is LOW")
+        print("Input pin is LOW dont move yet")
         myKit.servo[1].angle = 90
     time.sleep(1)  # Wait for 1 second before checking the pin again
 
