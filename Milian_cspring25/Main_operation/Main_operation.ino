@@ -12,7 +12,10 @@ const int ledPin = 2;
 
 void setup()
 {
-  pinMode(ledPin, OUTPUT);  
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+  delay(5000);
+  digitalWrite(ledPin, HIGH);  
   Serial.begin(115200);
   Wire.begin();
   
@@ -27,7 +30,8 @@ void setup()
   
   // Configure the LIDARLite device
   myLidarLite.configure(0);
-  
+
+
   // Optional: Add an I2C address scan to ensure the device is connected
   Serial.println("Scanning I2C bus...");
   for (byte address = 1; address < 127; address++) {
@@ -37,6 +41,9 @@ void setup()
       Serial.println(address, HEX);
     }
   }
+
+
+
 }
 
 void loop()
@@ -47,10 +54,10 @@ void loop()
     distance = myLidarLite.readDistance();
     if (distance <= 170 )
     {
-        digitalWrite(ledPin, HIGH);  // Triggered
+        digitalWrite(ledPin, LOW);  // Triggered
       }
     else{
-        digitalWrite(ledPin, LOW);  // No trigger
+        digitalWrite(ledPin, HIGH);  // No trigger
 
       }
   }
