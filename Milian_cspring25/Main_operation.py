@@ -26,7 +26,8 @@ myKit.servo[2].angle=90
 myKit.servo[1].angle=90 #hold the no mvmnt pwm
 myKit.servo[0].angle=90 #hold the center wheels
 xaxiscam = 110
-
+errorTilt2 = 0
+yaxiscam =90
 # Constants
 timeStamp = time.time()
 fpsFilt = 0
@@ -125,6 +126,8 @@ while True :#and onbutton==1:
                 myKit.servo[0].angle = steeringServoVal
                 pastSteeringServoVal= steeringServoVal
             buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
+            print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle
+
             #if buttonstate_state == GPIO.LOW:
             #    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
             #    myKit.servo[0].angle = 123#make it so that im turning left
@@ -176,6 +179,8 @@ while True :#and onbutton==1:
                     myKit.servo[0].angle = steeringServoVal
                     pastSteeringServoVal= steeringServoVal
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
+                print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle
+
                 #if buttonstate_state == GPIO.LOW :
                 #    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
                 #    myKit.servo[0].angle = 123#make it so that im turning left
@@ -185,44 +190,52 @@ while True :#and onbutton==1:
                 #    time.sleep(9)  # Wait for 9 seconds
                 break  # Process only the first large contour
 
-    # Process the second camera (Camera 1: Only Color Detection)
+    # Process the second camera 
     img2 = camera2.Capture()
+
+    width2 = img2.width  # Changed from 'width' to 'width2'
 
     # Convert to numpy array for OpenCV processing
     frame2 = jetson.utils.cudaToNumpy(img2)
     frame2 = cv2.cvtColor(frame2, cv2.COLOR_RGBA2BGR)
 
-    # Color Detection for Camera 1
-    hsv2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2HSV)
-    l_b2 = np.array([90, 157, 140]) #logis hue lower satlower value lower
-    u_b2 = np.array([179, 255, 215]) #logis  hue higher sat higher value higher
-    FGmask2 = cv2.inRange(hsv2, l_b2, u_b2)
-    FGmaskComp2 = FGmask2  # Avoid redundant addition to FGmaskComp
+    # Perform object detection on Camera 1
+    detections2 = net.Detect(img2)
 
-    cv2.imshow('FGmaskComp2', FGmaskComp2)
+    # Render the image to the display
+    display.Render(img2)
 
-    contours2, _ = cv2.findContours(FGmaskComp2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Check if any objects were detected on Camera 1
+    if detections2:
+        for detect2 in detections2:  # Changed from 'detect' to 'detect2'
+            ID2 = detect2.ClassID
+            top2 = int(detect2.Top)
+            left2 = int(detect2.Left)
+            bottom2 = int(detect2.Bottom)
+            right2 = int(detect2.Right)
+            item2 = net.GetClassDesc(ID2)
+            w2 = right2 - left2
+            h2 = top2 - bottom2
+            objx2 = left2 + (w2 / 2)  # Changed from 'left' and 'w' to 'left2' and 'w2'
+            objy2 = bottom2 + (h2/2)
+            errorPan2 = objx2 - img2.width / 2  # Changed from 'objx' and 'img' to 'objx2' and 'img2'
+            errorTilt2 = objy2 - img2.height / 2 
+            print(f"Object: {item2}, Off center by: ({errorPan2}), Width of: {w2}")
+        
+            if item2 == 'blue_bucket' and abs(errorPan2) > 50:
+                if errorPan2 > 0 and xaxiscam < 180:
+                    xaxiscam += 1
+                elif errorPan2 < 0 and xaxiscam > 0:
+                    xaxiscam -= 1 
+                myKit.servo[3].angle = xaxiscam
 
-    # Process color contours on Camera 1
-    if contours2:
-        for contour in contours2:
-            if cv2.contourArea(contour) > 700:  # Filter out small contours
-                x, y, w, h = cv2.boundingRect(contour)
-                x, y, w, h = int(x), int(y), int(w), int(h)  # Ensure integer values for rectangle
-                cv2.rectangle(frame2, (x, y), (x + w, y + h), (255, 0, 0), 3)  # Draw rectangle around object
-                objX = x + w / 2  # Calculate object's center X-coordinate
-                errorPan = objX - width / 2  # Calculate error in pan
-                print(f'Width of object: {w}')  # Print error value for debugging
-                if abs(errorPan) > 40:  # If the error is significant
-                    if errorPan > 0 and xaxiscam < 180:
-                        xaxiscam += 1
-                    elif errorPan < 0 and xaxiscam > 0:
-                        xaxiscam -= 1 
-                    myKit.servo[3].angle = xaxiscam
-                    print(f"xaxiscam value is: {xaxiscam}")  # Print the x axis angle
-                break  # Process only the first large contour
-    
-
+            if item2 == 'blue_bucket' and abs(errorTilt2) > 50:
+                if errorTilt2 > 0 and yaxiscam < 180:
+                    yaxiscam += 1
+                elif errorTilt2 <0 and yaxiscam >0: 
+                    yaxiscam -= 1 
+                myKit.servo[2].angle = yaxiscam
+                print(f"xaxiscam value is: {xaxiscam}")  # Print the x-axis camera angle
 
 
 
