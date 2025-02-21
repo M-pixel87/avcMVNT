@@ -1,21 +1,29 @@
-// This code is designed to output a '1' if an object in front of the sensor is too close. It’s up to the Orin to handle that trigger and decide how to respond.
+// This code is designed to output a '0' if an object in front of the sensor is too close. It’s up to the Orin to handle that trigger and decide how to respond.
 // If the detected object is a blue bucket, the Orin will take care of moving the servo accordingly.
 // This part of the code simply detects when an object is close, as you requested.
-
+// To use the car place hand in front of lidar first to set a 0 
 #include <Wire.h>
 #include "LIDARLite_v4LED.h"
 LIDARLite_v4LED myLidarLite;
 #define FAST_I2C
 float distance;
 byte lidarLiteAddress = 0x62;
-const int ledPin = 2;  
+const int distanctAlertPin = 2;  
+const int safteyPin = 3;  
 
-void setup()
-{
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
-  delay(5000);
-  digitalWrite(ledPin, HIGH);  
+void setup() {
+  //this is the new testest stuff
+  pinMode(distanctAlertPin, OUTPUT);
+  pinMode(safteyPin, INPUT);
+  digitalWrite(distanctAlertPin, LOW);  //makes the orin stay in the loop of not ready to start unless this was reset properly
+  int setUpRead = digitalRead(safteyPin); 
+  if (setUpRead == 0) {
+    while (true) {
+    }
+  }
+  digitalWrite(distanctAlertPin, HIGH);  
+  //end of the RandD
+
   Serial.begin(115200);
   Wire.begin();
   
@@ -54,10 +62,10 @@ void loop()
     distance = myLidarLite.readDistance();
     if (distance <= 170 )
     {
-        digitalWrite(ledPin, LOW);  // Triggered
+        digitalWrite(distanctAlertPin, LOW);  // Triggered
       }
     else{
-        digitalWrite(ledPin, HIGH);  // No trigger
+        digitalWrite(distanctAlertPin, HIGH);  // No trigger
 
       }
   }
