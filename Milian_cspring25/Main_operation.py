@@ -1,6 +1,7 @@
 #this code is my most mighty fine code ive made and its import to remember the orienation of the cameras 
 #the eleco rect looking one belongs on the top usb fnt port and other one on the bottom 
-
+# Import the GPIO library for controlling the GPIO pins on the Jetson
+# this a recent servo lib that i brought
 import jetson.inference
 import jetson.utils
 import time
@@ -8,29 +9,51 @@ import cv2
 import numpy as np
 import serial
 import math
-import Jetson.GPIO as GPIO  # Import the GPIO library for controlling the GPIO pins on the Jetson
-from adafruit_servokit import ServoKit # this a recent servo lib that i brought
+import Jetson.GPIO as GPIO  
+from adafruit_servokit import ServoKit 
+
+
+
+
+GPIO.setup('GP49_SPI1_MOSI', GPIO.IN) #flag: its phyisical pin 19 11th from the top left
+GPIO.setup('GP48_SPI1_MISO', GPIO.OUT) #saftey: and is pin 21 (10th from the top left)
 
 
 #servo3 is for xaxis cam
 #servo2 is for yaxis cam
 #servo1 is for speed controll
 #servo0 is for direction control
-
-#GPIO.setmode(GPIO.BOARD)  this was shown to be called already with high probability of adafruit calling it
-GPIO.setup('GP49_SPI1_MOSI', GPIO.IN) #kk chat i think it phyisical pin 19 # Set up the pin as an input pin which is pin 21 for now //newestupdate i found the data sheet and i think 'GP49_SPI1_MOSI' is the right spelling of SPI1_MISO
-
 myKit=ServoKit(channels=16)
-myKit.servo[3].angle=110
-myKit.servo[2].angle=90
+myKit.servo[3].angle=110 #center x wise
+myKit.servo[2].angle=90 #center y wise
 myKit.servo[1].angle=90 #hold the no mvmnt pwm
 myKit.servo[0].angle=90 #hold the center wheels
-xaxiscam = 110
-errorTilt2 = 0
-yaxiscam =90
+
+
 # Constants
-timeStamp = time.time()
+# the proportional steering value
+# the dirivative past steering value
+# xaxiscam belongs to the cam two x axis
+# yaxiscam belongs to the cam two y axis
+# make my flag unread so im in the look untill i read a 1
+steeringServoVal=0
+pastSteeringServoVal =0
+xaxiscam = 110
+yaxiscam =90
+onbutton=0
+
+#errorTilt2 = 0 throw this shit away i think
+#pan = 0  # Initialize pan variable another useless one i think
+
+
+#remember to fix these as fit P constant is proportion and D is the derivative a fairly new part to my code
+Dconstant = .5
+Pconstant = 1
+
+
 fpsFilt = 0
+timeStamp = time.time()
+
 
 # Initialize the object detection model (for Camera 0)
 net = jetson.inference.detectNet(model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_fone/ssd-mobilenet.onnx",
@@ -68,46 +91,43 @@ cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 # Initialize display object
 display = jetson.utils.videoOutput()
 
-steeringServoVal=0
-pastSteeringServoVal =0
-onbutton=0
-
-# Define action codes
-AvoidObstacle = 250
-Stop = 350
-Dconstant = .5
-Pconstant = 1
-
-# Initialize pan value
-pan = 0  # Initialize pan variable
-
-#while onbutton==0:
-#    buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-#    if buttonstate_state == GPIO.HIGH:
-#        print("Input pin is HIGH! MVMNT start")
-#        onbutton = 1
-#        myKit.servo[1].angle=115 #start the movement
-#    else:
-#        print("Input pin is LOW dont move yet")
-#        myKit.servo[1].angle = 90
-#    time.sleep(1)  # Wait for 1 second before checking the pin again
 
 
-while True :#and onbutton==1:
-    # Process the first camera (Camera 0: Object Detection + Color Detection)
+# This section is supposed to send a 1 constantly, and the Uno reads once.  
+# If reset properly(python runs first then rest), then everything is fine.  
+# GP48 is the output switch and is the tenth pin from the top left corner  
+# of the GPIO pins on the Orin, feeding the Uno pin 3.  
+# GP49 is the flag checker on the Orin that checks whether I'm close to obsticale.  
+# It's the 11th pin from the top left (counting from left to right).  
+# I say this because the pins are counted from right to left on the datasheet.  
+# This feeds pin 2 on the Uno board.  
+
+
+GPIO.output('GP48_SPI1_MISO', GPIO.HIGH)  
+while onbutton==0:
+    buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
+    if buttonstate_state == GPIO.HIGH:
+        print("Input pin is HIGH! MVMNT start")
+        onbutton = 1
+        myKit.servo[1].angle=115 #start the movement
+        GPIO.output('GP48_SPI1_MISO', GPIO.LOW)  
+
+    else:
+        print("Input pin is LOW dont move yet")
+        myKit.servo[1].angle = 90
+        time.sleep(5)
+
+
+
+
+while True:
+    # Process the first camera and adjust the wheels
     img = camera.Capture()
     width = img.width
-    # Convert to numpy array for OpenCV processing
     frame = jetson.utils.cudaToNumpy(img)
     frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-
-    # Perform object detection on Camera 0
     detections = net.Detect(img)
-    
-    # Render the image to the display
     display.Render(img)
-    
-    # Check if any objects were detected on Camera 0
     if detections:
         for detect in detections:
             ID = detect.ClassID
@@ -127,17 +147,9 @@ while True :#and onbutton==1:
                 pastSteeringServoVal= steeringServoVal
             buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
             print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle
-
-            #if buttonstate_state == GPIO.LOW:
-            #    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
-            #    myKit.servo[0].angle = 123#make it so that im turning left
-            #    myKit.servo[1].angle = 115#set the speed to
-            #    time.sleep(3)  # Wait for 3 second 
-            #    myKit.servo[0].angle = 55#make it so that im turning right
-            #    time.sleep(9)  # Wait for 9 seconds
                 
 
-    # Color Detection for Camera 0 (on top of Object Detection)
+    # Color Detection for Camera 0 (on top of Object Detection) with slide track to adjust for hue
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
     hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
@@ -158,12 +170,11 @@ while True :#and onbutton==1:
     FGmask = cv2.inRange(hsv, l_b, u_b)
     FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
     FGmaskComp = cv2.add(FGmask, FGmask2)
-
     cv2.imshow('FGmaskComp', FGmaskComp)
-
     contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Process color contours
+
+    # Process color contours of the first camera if it never caught anything with AI
     if not detections and contours:
         for contour in contours:
             if cv2.contourArea(contour) > 700:  # Filter out small contours
@@ -180,34 +191,17 @@ while True :#and onbutton==1:
                     pastSteeringServoVal= steeringServoVal
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
                 print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle
+                break  
 
-                #if buttonstate_state == GPIO.LOW :
-                #    #i need to start that evaiding action now servo 0 is streeing and 1 is esc
-                #    myKit.servo[0].angle = 123#make it so that im turning left
-                #    myKit.servo[1].angle = 115#set the speed to
-                #    time.sleep(3)  # Wait for 3 second 
-                #    myKit.servo[0].angle = 55#make it so that im turning right
-                #    time.sleep(9)  # Wait for 9 seconds
-                break  # Process only the first large contour
-
-    # Process the second camera 
+    # Process the second camera using object dection and this camera by the way moves
     img2 = camera2.Capture()
-
-    width2 = img2.width  # Changed from 'width' to 'width2'
-
-    # Convert to numpy array for OpenCV processing
+    width2 = img2.width 
     frame2 = jetson.utils.cudaToNumpy(img2)
     frame2 = cv2.cvtColor(frame2, cv2.COLOR_RGBA2BGR)
-
-    # Perform object detection on Camera 1
     detections2 = net.Detect(img2)
-
-    # Render the image to the display
     display.Render(img2)
-
-    # Check if any objects were detected on Camera 1
     if detections2:
-        for detect2 in detections2:  # Changed from 'detect' to 'detect2'
+        for detect2 in detections2: 
             ID2 = detect2.ClassID
             top2 = int(detect2.Top)
             left2 = int(detect2.Left)
@@ -216,9 +210,9 @@ while True :#and onbutton==1:
             item2 = net.GetClassDesc(ID2)
             w2 = right2 - left2
             h2 = top2 - bottom2
-            objx2 = left2 + (w2 / 2)  # Changed from 'left' and 'w' to 'left2' and 'w2'
+            objx2 = left2 + (w2 / 2)  
             objy2 = bottom2 + (h2/2)
-            errorPan2 = objx2 - img2.width / 2  # Changed from 'objx' and 'img' to 'objx2' and 'img2'
+            errorPan2 = objx2 - img2.width / 2 
             errorTilt2 = objy2 - img2.height / 2 
             print(f"Object: {item2}, Off center by: ({errorPan2}), Width of: {w2}")
         
@@ -236,7 +230,17 @@ while True :#and onbutton==1:
                     yaxiscam -= 1 
                 myKit.servo[2].angle = yaxiscam
                 print(f"xaxiscam value is: {xaxiscam}")  # Print the x-axis camera angle
+                print(f"yaxiscam value is: {yaxiscam}")  # Print the x-axis camera angle
 
+            buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
+                print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle            
+            if buttonstate_state == GPIO.LOW:
+                #i need to start that evaiding action now servo 0 is streeing and 1 is esc
+                myKit.servo[0].angle = 123#make it so that im turning left
+                myKit.servo[1].angle = 115#set the speed to
+                time.sleep(3)  # Wait for 3 second 
+                myKit.servo[0].angle = 55#make it so that im turning right
+                time.sleep(9)  # Wait for 9 seconds
 
 
         
