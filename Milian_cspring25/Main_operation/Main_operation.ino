@@ -8,31 +8,22 @@ LIDARLite_v4LED myLidarLite;
 #define FAST_I2C
 float distance;
 byte lidarLiteAddress = 0x62;
-const int distanctAlertPin = 2;  
-const int safteyPin = 3;  
+const int distanctAlertPin = 2;  //
+const int safteyPin = 3;  // 
+int setUpRead = 0;
 
 void setup() {
-  //this is the new testest stuff
-  pinMode(distanctAlertPin, OUTPUT);
-  pinMode(safteyPin, INPUT);
-  digitalWrite(distanctAlertPin, LOW);  //makes the orin stay in the loop of not ready to start unless this was reset properly
-  int setUpRead = digitalRead(safteyPin); 
-  if (setUpRead == 0) {
-    while (true) {
-    }
-  }
-  digitalWrite(distanctAlertPin, HIGH);  
-  //end of the RandD
-
+  pinMode(distanctAlertPin, OUTPUT); //
+  pinMode(safteyPin, OUTPUT); //
+  digitalWrite(safteyPin, HIGH);  //this tells my orin to start
   Serial.begin(115200);
   Wire.begin();
   
-  // Set I2C frequency to 400kHz for compatible boards (e.g., Arduino Due)
 #ifdef FAST_I2C
 #if ARDUINO >= 157
-  Wire.setClock(400000UL); // Set I2C frequency to 400kHz (for Arduino Due)
+  Wire.setClock(400000UL);
 #else
-  TWBR = ((F_CPU / 400000UL) - 16) / 2; // Set I2C frequency to 400kHz
+  TWBR = ((F_CPU / 400000UL) - 16) / 2; 
 #endif
 #endif
   
@@ -62,10 +53,10 @@ void loop()
     distance = myLidarLite.readDistance();
     if (distance <= 170 )
     {
-        digitalWrite(distanctAlertPin, LOW);  // Triggered
+        digitalWrite(distanctAlertPin, HIGH);  // Triggered
       }
     else{
-        digitalWrite(distanctAlertPin, HIGH);  // No trigger
+        digitalWrite(distanctAlertPin, LOW);  // No trigger
 
       }
   }

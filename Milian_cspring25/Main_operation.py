@@ -16,7 +16,7 @@ from adafruit_servokit import ServoKit
 
 
 GPIO.setup('GP49_SPI1_MOSI', GPIO.IN) #flag: its phyisical pin 19 11th from the top left
-GPIO.setup('GP48_SPI1_MISO', GPIO.OUT) #saftey: and is pin 21 (10th from the top left)
+GPIO.setup('GP48_SPI1_MISO', GPIO.IN) #saftey: and is pin 21 (10th from the top left)
 
 
 #servo3 is for xaxis cam
@@ -42,12 +42,10 @@ xaxiscam = 110
 yaxiscam =90
 onbutton=0
 
-#errorTilt2 = 0 throw this shit away i think
-#pan = 0  # Initialize pan variable another useless one i think
-
+pigsfly=0
 
 #remember to fix these as fit P constant is proportion and D is the derivative a fairly new part to my code
-Dconstant = .5
+Dconstant = .1
 Pconstant = 1
 
 
@@ -103,14 +101,12 @@ display = jetson.utils.videoOutput()
 # This feeds pin 2 on the Uno board.  
 
 
-GPIO.output('GP48_SPI1_MISO', GPIO.HIGH)  
 while onbutton==0:
-    buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
+    buttonstate_state = GPIO.input('GP48_SPI1_MISO')
     if buttonstate_state == GPIO.HIGH:
         print("Input pin is HIGH! MVMNT start")
         onbutton = 1
         myKit.servo[1].angle=115 #start the movement
-        GPIO.output('GP48_SPI1_MISO', GPIO.LOW)  
 
     else:
         print("Input pin is LOW dont move yet")
@@ -140,16 +136,15 @@ while True:
             objx = left + (w / 2)
             errorPan = objx - img.width / 2
             print(f"Object: {item}, Off center by: ({errorPan}), Width of: {w}")
-            if item == 'blue_bucket' and abs(errorPan) > 50 :
+            if item == 'blue_bucket' and abs(errorPan) > 50 and pigsfly == 0:
                 errorPan = math.ceil(errorPan / 15)
                 steeringServoVal = Pconstant * (90 - errorPan) - Dconstant * ((steeringServoVal - pastSteeringServoVal) / 2)
                 myKit.servo[0].angle = steeringServoVal
                 pastSteeringServoVal= steeringServoVal
             buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-            print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle
+            print(f"GPIO pin value: {buttonstate_state}")  # Tell me weather the lidar is getting a 0 or 1
                 
 
-    # Color Detection for Camera 0 (on top of Object Detection) with slide track to adjust for hue
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
     hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
@@ -159,14 +154,10 @@ while True:
     Us = cv2.getTrackbarPos('satHigh', 'Trackbars')
     Lv = cv2.getTrackbarPos('valLow', 'Trackbars')
     Uv = cv2.getTrackbarPos('valHigh', 'Trackbars')
-
-    # Define lower and upper bounds for color mask
     l_b = np.array([hueLow, Ls, Lv])
     u_b = np.array([hueUp, Us, Uv])
     l_b2 = np.array([hue2Low, Ls, Lv])
     u_b2 = np.array([hue2Up, Us, Uv])
-    
-    # Create color masks
     FGmask = cv2.inRange(hsv, l_b, u_b)
     FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
     FGmaskComp = cv2.add(FGmask, FGmask2)
@@ -184,13 +175,13 @@ while True:
                 objX = x + w / 2  # Calculate object's center X-coordinate
                 errorPan = objX - width / 2  # Calculate error in pan
                 print(f'Width of object: {w}')  # Print error value for debugging
-                if abs(errorPan) > 40:  # If the error is significant
+                if abs(errorPan) > 40 and pigsfly == 0 : 
                     errorPan = math.ceil(errorPan / 15)
                     steeringServoVal = Pconstant * (90 - errorPan) - Dconstant * ((steeringServoVal - pastSteeringServoVal) / 2)
                     myKit.servo[0].angle = steeringServoVal
                     pastSteeringServoVal= steeringServoVal
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-                print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle
+                print(f"GPIO pin value: {buttonstate_state}") 
                 break  
 
     # Process the second camera using object dection and this camera by the way moves
@@ -216,6 +207,12 @@ while True:
             errorTilt2 = objy2 - img2.height / 2 
             print(f"Object: {item2}, Off center by: ({errorPan2}), Width of: {w2}")
         
+
+
+
+
+
+            #code that aligns the lidar with the bucket
             if item2 == 'blue_bucket' and abs(errorPan2) > 50:
                 if errorPan2 > 0 and xaxiscam < 180:
                     xaxiscam += 1
@@ -229,18 +226,27 @@ while True:
                 elif errorTilt2 <0 and yaxiscam >0: 
                     yaxiscam -= 1 
                 myKit.servo[2].angle = yaxiscam
+
                 print(f"xaxiscam value is: {xaxiscam}")  # Print the x-axis camera angle
-                print(f"yaxiscam value is: {yaxiscam}")  # Print the x-axis camera angle
+                print(f"yaxiscam value is: {yaxiscam}")  # Print the y-axis camera angle
+
+
+
+
+
 
             buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-                print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle            
-            if buttonstate_state == GPIO.LOW:
+            print(f"GPIO pin value: {buttonstate_state}")  # Print the x axis angle            
+            if buttonstate_state == GPIO.HIGH:
                 #i need to start that evaiding action now servo 0 is streeing and 1 is esc
-                myKit.servo[0].angle = 123#make it so that im turning left
-                myKit.servo[1].angle = 115#set the speed to
-                time.sleep(3)  # Wait for 3 second 
-                myKit.servo[0].angle = 55#make it so that im turning right
-                time.sleep(9)  # Wait for 9 seconds
+                #myKit.servo[0].angle = 123#make it so that im turning left
+                #myKit.servo[1].angle = 115#set the speed to
+                #time.sleep(3)  # Wait for 3 second 
+                #myKit.servo[0].angle = 55#make it so that im turning right
+                #time.sleep(9)  # Wait for 9 seconds
+                pigsfly = 1
+                myKit.servo[1].angle = 90#this is in the meantime to test the code
+
 
 
         
