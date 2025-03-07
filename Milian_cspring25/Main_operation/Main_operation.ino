@@ -15,6 +15,7 @@ int setUpRead = 0;
 void setup() {
   pinMode(distanctAlertPin, OUTPUT); //
   pinMode(safteyPin, OUTPUT); //
+  pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(safteyPin, HIGH);  //this tells my orin to start
   Serial.begin(115200);
   Wire.begin();
@@ -54,9 +55,11 @@ void loop()
     if (distance <= 170 )
     {
         digitalWrite(distanctAlertPin, HIGH);  // Triggered
+        digitalWrite(LED_BUILTIN, HIGH);  // Triggered
       }
     else{
         digitalWrite(distanctAlertPin, LOW);  // No trigger
+        digitalWrite(LED_BUILTIN, LOW);  // Triggered
 
       }
   }
