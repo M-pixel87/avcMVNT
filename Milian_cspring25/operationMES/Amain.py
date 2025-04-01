@@ -194,7 +194,7 @@ while True:
             objy2 = top2 + (h2 / 2)          
             errorPan2 = objx2 - img2.width / 2
             errorTilt2 = objy2 - img2.height / 2
-            if not shared.evading and shared.target_conditions['red_bucket_arch'] != shared.current_step and not shared.AiHUDkey:
+            if not shared.evading and shared.target_conditions['red_bucketArch'] != shared.current_step and not shared.AiHUDkey:
                 AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)
             if abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI') # HANDLES The lidar detection
