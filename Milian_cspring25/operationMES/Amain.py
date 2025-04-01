@@ -198,7 +198,7 @@ while True:
                 AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)
             if abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI') # HANDLES The lidar detection
-                if buttonstate_state == 1 and not shared.evading and not shared.looking and shared.target_conditions['red_bucket_arch'] != shared.current_step:
+                if buttonstate_state == 1 and not shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] != shared.current_step:
                     evasion(class_name2)
             if shared.looking==True or shared.AiHUDkey==True:  # Fixed syntax
                 AisearchStopTrigger(class_name2, shared.current_step)  # Fixed variable name

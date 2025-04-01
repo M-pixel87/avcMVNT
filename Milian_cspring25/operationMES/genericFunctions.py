@@ -76,12 +76,12 @@ def evasion(localItem):
         print("Evading BlueBucket")
         shared.current_step += 1
         shared.evasionType = 1
-        turning(180, 126, 3, 30, 126, 11)
+        turning(180, 126, 3, 30, 132, 12)
     elif(localItem == 'yellow_bucket' and shared.current_step== 2):
         print("Evading YellowBucket")
         shared.current_step += 1
         shared.evasionType = 2
-        turning(33, 126, 4, 180, 126, 4)
+        turning(33, 126, 4, 180, 126, 11)
     elif(localItem == 'ramp' and shared.current_step==4):
         print("mama im scared i dont want to jump")
         shared.current_step += 1

@@ -27,7 +27,7 @@ class SharedState:
             'blue_bucket_secondtime': 3,
             'ramp': 4,
             'blue_bucket_thirdtime': 5,
-            'red_bucket_arch': 6,
+            'red_bucketArch': 6,
             'blue_bucket_lasttime': 7
         }
 
