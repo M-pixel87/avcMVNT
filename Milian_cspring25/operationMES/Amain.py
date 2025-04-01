@@ -10,7 +10,7 @@ from adafruit_servokit import ServoKit
 import threading
 from globals import shared
 from genericFunctions import ESCWaitFunction, searching, turning, evasion
-from Balignment import AiAlignment, CVAlignment, AiCamTarget, CVCamTarget, AiTurnStopErly,CVTurnStopErly
+from Balignment import AiAlignment, CVAlignment, AiCamTarget, CVCamTarget, AiTurnStopErly,CVTurnStopErly, AiHUDcamAlign, AisearchStopTrigger
 
 
 
@@ -55,38 +55,27 @@ cv2.createTrackbar('valHigh', 'Trackbars', 255, 255, nothing)
 cv2.namedWindow('detCam', cv2.WINDOW_NORMAL)
 cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 
-def checkType(localItem):
-    shared.evading = True
-    if localItem == 'blue_bucket':
-        print("Evading BlueBucket")
-        shared.current_step += 1
-        shared.evasionType = 1
-        blueEvade()
-    elif localItem == 'yellow_bucket':
-        print("Evading YellowBucket")
-        shared.current_step += 1
-        shared.evasionType = 2
-        yellowEvade()
-    elif localItem == 'red_bucketArch':
-        print("Evading RedBucket")
-        shared.current_step += 1
-        shared.evasionType = 3
-        redEvade()
-    else:
-        print("I see something else")
-        shared.evasionType = 0
-        defaultEvade()
+
 
 ESCWaitFunction()
 
 # Main loop
 while True:
+
+
+
+
+#____________________________________________________________________________________________________________________________________
+#first Camera this cam only handels aligning the car with the bucket
     img = camera.Capture()
     frame = jetson.utils.cudaToNumpy(img)
     frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
     detections = net.Detect(img)
     display.Render(img)
 
+
+
+#this is the filter
     if detections:
         best_detections = {}
         for detect in detections:
@@ -94,7 +83,7 @@ while True:
             confidence = detect.Confidence
             if class_name not in best_detections or confidence > best_detections[class_name].Confidence:
                 best_detections[class_name] = detect
-        
+    
         for class_name, best_detect in best_detections.items():
             ID = best_detect.ClassID
             top = int(best_detect.Top)
@@ -105,15 +94,12 @@ while True:
             w = right - left
             objx = left + (w / 2)
             errorPan = objx - img.width / 2
-            
-            print(f"Best {class_name} ({confidence:.1f}%), Center Error: {errorPan}, Width: {w}")
-
-            if not shared.evading:
+            if not shared.evading and not shared.looking:
+                shared.AiHUDkey = False  # Fixed assignment
                 AiAlignment(class_name, errorPan, shared.current_step)
-            else:
+            elif shared.evading and not shared.AiHUDkey:
                 AiTurnStopErly(class_name, shared.current_step, errorPan)
 
-    # Image processing
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
     hueUp = cv2.getTrackbarPos('hueUpper', 'Trackbars')
@@ -123,49 +109,63 @@ while True:
     Us = cv2.getTrackbarPos('satHigh', 'Trackbars')
     Lv = cv2.getTrackbarPos('valLow', 'Trackbars')
     Uv = cv2.getTrackbarPos('valHigh', 'Trackbars')
-    
+
     l_b = np.array([hueLow, Ls, Lv])
     u_b = np.array([hueUp, Us, Uv])
     l_b2 = np.array([hue2Low, Ls, Lv])
     u_b2 = np.array([hue2Up, Us, Uv])
 
-    if shared.current_step % 2 != 0:  # Fixed: added shared. prefix
+    if shared.current_step % 2 != 0:  
         l_b = np.array([0, 146, 106])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([89, 146, 106])
         u_b2 = np.array([124, 255, 255])
 
-    if shared.target_conditions['yellow_bucket'] == shared.current_step:  # Fixed: added shared. prefix
+    if shared.target_conditions['yellow_bucket'] == shared.current_step:
         l_b = np.array([0, 146, 106])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([10, 135, 221])
         u_b2 = np.array([68, 255, 255])
+
+    if shared.target_conditions['ramp'] == shared.current_step:
+        l_b = np.array([0, 146, 106])
+        u_b = np.array([0, 255, 255])
+        l_b2 = np.array([10, 135, 221])
+        u_b2 = np.array([68, 255, 255]) 
+
+    if shared.target_conditions['red_bucketArch'] == shared.current_step:  # Fixed key
+        l_b = np.array([0, 146, 106])
+        u_b = np.array([0, 255, 255])
+        l_b2 = np.array([10, 135, 221])
+        u_b2 = np.array([68, 255, 255])   
 
     FGmask = cv2.inRange(hsv, l_b, u_b)
     FGmask2 = cv2.inRange(hsv, l_b2, u_b2)
     FGmaskComp = cv2.add(FGmask, FGmask2)
     contours, _ = cv2.findContours(FGmaskComp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    if not detections and contours and not shared.evading:  # Fixed: added shared. prefix
+    if not detections and contours and not shared.evading:
         for contour in contours:
             if cv2.contourArea(contour) > 100:  
-                shared.bigContours = True  # Fixed: added shared. prefix
+                shared.bigContours = True
                 x, y, w, h = cv2.boundingRect(contour)
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
                 objX = x + w / 2  
-                errorPan = objX - (frame.shape[1] / 2)
-                if abs(errorPan) > 40 and shared.pigsfly == 0 and not shared.evading:  # Fixed: added shared. prefix
+                errorPan = objX - (img.width / 2)
+                if abs(errorPan) > 40 and shared.pigsfly == 0 and not shared.evading: 
+                    shared.AiHUDkey = False  # Fixed assignment
                     CVAlignment(errorPan)
-                elif shared.evading:  # Fixed: added shared. prefix
-                    CVTurnStopErly()
+                elif shared.evading:  
+                    CVTurnStopErly(errorPan)
                 break  
             else:
-                shared.bigContours = False  # Fixed: added shared. prefix
-                shared.myKit.servo[1].angle = 90  # Fixed: added shared. prefix
-    elif not detections and not contours and not shared.evading:  # Fixed: added shared. prefix
-        shared.myKit.servo[1].angle = 90  # Fixed: added shared. prefix
+                shared.bigContours = False  
+                shared.myKit.servo[1].angle = 90  
+    elif not detections and not contours and not shared.evading:  
+        shared.myKit.servo[1].angle = 90  
+        searching()
 
-    # Process the second camera
+    # Second Camera
     img2 = camera2.Capture()
     width2 = img2.width
     height2 = img2.height
@@ -194,72 +194,80 @@ while True:
             objy2 = top2 + (h2 / 2)          
             errorPan2 = objx2 - img2.width / 2
             errorTilt2 = objy2 - img2.height / 2
-            #print(f"Object: {class_name2}, Off center by: ({errorPan2}), Width of: {w2}")
-            if not shared.evading:  # Fixed: added shared. prefix
-                AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)  # Fixed: added shared. prefix
-            
-
-            if abs(errorPan) <100
-                buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-                if buttonstate_state == 1 and not evading and not looking:
+            if not shared.evading and shared.target_conditions['red_bucket_arch'] != shared.current_step and not shared.AiHUDkey:
+                AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)
+            if abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
+                buttonstate_state = GPIO.input('GP49_SPI1_MOSI') # HANDLES The lidar detection
+                if buttonstate_state == 1 and not shared.evading and not shared.looking and shared.target_conditions['red_bucket_arch'] != shared.current_step:
                     evasion(class_name2)
-
-
-
-            #if shared.turningleft:  # Fixed: added shared. prefix
-                #turning(180, 126, 3, 30, 126, 11)
-            #elif shared.turnright:  # Fixed: added shared. prefix
-                #turning(33, 126, 4, 180, 126, 4)
+            if shared.looking==True or shared.AiHUDkey==True:  # Fixed syntax
+                AisearchStopTrigger(class_name2, shared.current_step)  # Fixed variable name
+                if shared.looking == False:
+                    AiHUDcamAlign(shared.angle, class_name2, shared.current_step, errorPan2, errorTilt2)
 
     hsv2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2HSV)
-    if shared.current_step % 2 != 0:  # Fixed: added shared. prefix
+    if shared.current_step % 2 != 0:  
         l_b = np.array([0, 108, 162])
         u_b = np.array([0, 205, 251])
         l_b2 = np.array([10, 108, 162])
         u_b2 = np.array([26, 205, 251])
-    if shared.target_conditions['yellow_bucket'] == shared.current_step:  # Fixed: added shared. prefix
+    elif shared.target_conditions['yellow_bucket'] == shared.current_step:
         l_b = np.array([0, 198, 158])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([89, 198, 158])
         u_b2 = np.array([135, 255, 255])
+    elif shared.target_conditions['ramp'] == shared.current_step:
+        l_b = np.array([0, 198, 158])
+        u_b = np.array([0, 255, 255])
+        l_b2 = np.array([89, 198, 158])
+        u_b2 = np.array([135, 255, 255])
+    elif shared.target_conditions['red_bucket_arch'] == shared.current_step:  # Fixed key
+        l_b = np.array([0, 198, 158])
+        u_b = np.array([0, 255, 255])
+        l_b2 = np.array([89, 198, 158])
+        u_b2 = np.array([135, 255, 255])
+
     FGmask3 = cv2.inRange(hsv2, l_b, u_b)
     FGmask4 = cv2.inRange(hsv2, l_b2, u_b2)
     FGmaskComp2 = cv2.add(FGmask3, FGmask4)
     contours2, _ = cv2.findContours(FGmaskComp2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    if not detections2 and contours2 and not shared.evading:  # Fixed: added shared. prefix
+    if not detections2 and contours2 and not shared.evading:  
         for contour in contours2:
             if cv2.contourArea(contour) > 100:
-                shared.bigContours2 = True  # Fixed: added shared. prefix
+                shared.bigContours2 = True  
                 x, y, w, h = cv2.boundingRect(contour)
                 x, y, w, h = int(x), int(y), int(w), int(h)
                 cv2.rectangle(frame2, (x, y), (x + w, y + h), (255, 0, 0), 3)
                 objX = x + w / 2
                 objY = y + h / 2
                 errorPan2 = objX - width2 / 2
-                errorTilt2 = objY - height2 / 2
-#added
-                
-                if abs(errorPan2) > 40 and shared.pigsfly == 0 and not shared.evading:  # Fixed: added shared. prefix
+                errorTilt2 = objY - height2 / 2                
+                if abs(errorPan2) > 40 and shared.pigsfly == 0 and not shared.evading and not shared.AiHUDkey:
                     CVCamTarget(errorPan2, errorTilt2)
-                elif shared.searching:  # Fixed: added shared. prefix
-                    #print(f"we are searching this area is underconstruction")
-                break
+                if w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucket_arch'] == shared.current_step and not shared.AiHUDkey:
+                    evasion(class_name2) 
+            else:
+                shared.bigContours2 = False  
+                shared.myKit.servo[1].angle = 90  
+            break  # Fixed indentation
 
-        #print(f"xaxiscam value is: {shared.xaxiscam}")  # Fixed: added shared. prefix
-        #print(f"yaxiscam value is: {shared.yaxiscam}")  # Fixed: added shared. prefix
-        #buttonstate_state = GPIO.input('GP49_SPI1_MOSI')
-        #print(f"GPIO pin value: {buttonstate_state}  CurrentStep: {shared.current_step}")  # Fixed: added shared. prefix
-        #if buttonstate_state == 1 and not shared.evading and not shared.looking:  # Fixed: added shared. prefix
-            #print(shared.lastItem)  # Fixed: added shared. prefix
-            #checkType(shared.lastItem)  # Fixed: added shared. prefix
-    
-    if not detections2 and not shared.evading and not detections and not shared.looking and not shared.bigContours:  # Fixed: added shared. prefix
-        searching()
-
-    print(" ")
-    print(f"{shared.lastItem} : {len(detections)} : {len(detections2)} : {len(contours)} : {shared.evading} : {shared.looking} : {shared.evasionType} : {shared.current_step}")
-    print(" ")
+    # Status display
+    try:
+        current_target = [key for key, val in shared.target_conditions.items() if val == shared.current_step][0]
+    except IndexError:
+        current_target = "Unknown"
+    print(f"""
+    [STATUS] 
+    Target: {current_target.replace('_', ' ').title()} 
+    Step: {shared.current_step}
+    Evading: {'YES' if shared.evading else 'NO'}
+    Searching: {'YES' if shared.looking else 'NO'}
+    Detections: {len(detections)} (Cam1), {len(detections2)} (Cam2)
+    Contours: {len(contours)}
+    Evasion Type: {shared.evasionType}
+    Last Item: {shared.lastItem}
+--------------------------------------""")
 
     frame_resized = cv2.resize(frame, (320, 240))
     frame2_resized = cv2.resize(frame2, (320, 240))

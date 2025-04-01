@@ -14,12 +14,13 @@ class SharedState:
         self.Pconstant = 1.0
         self.Dconstant = 1.0
         self.lastItem = None
-        self.evasionType = 0        # Added
-        self.bigContours = False     # Added
-        self.bigContours2 = False    # Added
-        self.turningleft = False     # Added
-        self.turnright = False       # Added
-        self.searching = False       # Added
+        self.evasionType = 0        
+        self.bigContours = False    
+        self.bigContours2 = False    
+        self.turningleft = False     
+        self.turnright = False       
+        self.angle = 0
+        self.AiHUDkey =False
         self.target_conditions = {
             'blue_bucket_firstime': 1,
             'yellow_bucket': 2,
