@@ -221,7 +221,7 @@ while True:
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([89, 198, 158])
         u_b2 = np.array([135, 255, 255])
-    elif shared.target_conditions['red_bucket_arch'] == shared.current_step:  # Fixed key
+    elif shared.target_conditions['red_bucketArch'] == shared.current_step:  # Fixed key
         l_b = np.array([0, 198, 158])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([89, 198, 158])
@@ -245,7 +245,7 @@ while True:
                 errorTilt2 = objY - height2 / 2                
                 if abs(errorPan2) > 40 and shared.pigsfly == 0 and not shared.evading and not shared.AiHUDkey:
                     CVCamTarget(errorPan2, errorTilt2)
-                if w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucket_arch'] == shared.current_step and not shared.AiHUDkey:
+                if w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
                     evasion(class_name2) 
             else:
                 shared.bigContours2 = False  
