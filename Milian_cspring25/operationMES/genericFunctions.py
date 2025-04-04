@@ -48,7 +48,7 @@ def searching():
 
     
 
-def turning(angle, speed, duration, angle2, speed2, duration2):
+def turning(angle, speed, duration, angle2, speed2, duration2, direction):
     shared.evading = True
     shared.myKit.servo[0].angle = angle
     shared.myKit.servo[1].angle = speed
@@ -64,12 +64,12 @@ def turning(angle, speed, duration, angle2, speed2, duration2):
         shared.myKit.servo[1].angle = 90
         shared.evading = False
         if(not shared.detection):
-            orbit('right')
+            orbit(direction)
         #print('\nDONE EVADING\n')
     threading.Thread(target=turn_and_stop).start()
 
 #THIS IS ONLY FOR ORBIT, SHARED.EVADING IS REMOVED 3 STEPS
-def turning(angle, speed, duration, angle2, speed2, duration2, angle3, speed3, duration3):
+def turningOrbit(angle, speed, duration, angle2, speed2, duration2, angle3, speed3, duration3):
     shared.myKit.servo[0].angle = angle
     shared.myKit.servo[1].angle = speed
     shared.myKit.servo[2].angle = 90
@@ -100,9 +100,9 @@ def orbit(dir):
             break
         #Turning numbers are to be adjusted
         if(dir == 'left'):
-            turning(85, 130, 5, 153, 132, 4, 90, 132, 5)
+            turningOrbit(85, 130, 5, 153, 132, 4, 90, 132, 5)
         elif(dir == 'right'):
-            turning(95, 132, 5, 27, 132, 4, 85, 132, 5)
+            turningOrbit(95, 132, 5, 27, 132, 4, 85, 132, 5)
         
 
 def evasion(localItem):
@@ -111,19 +111,23 @@ def evasion(localItem):
         print("Evading BlueBucket")
         shared.current_step += 1
         shared.evasionType = 1
-        turning(180, 130, 3, 27, 132, 12)
+        turning(180, 130, 2, 27, 132, 8, "right")
     elif(localItem == 'yellow_bucket' and shared.current_step== 2):
         print("Evading YellowBucket")
         shared.current_step += 1
         shared.evasionType = 2
-        turning(27, 130, 4, 180, 132, 11)
+        turning(27, 130, 3, 170, 132, 8, "left")
     elif(localItem == 'ramp' and shared.current_step==4):
         print("mama im scared i dont want to jump")
         shared.current_step += 1
         shared.evasionType = 3
-        turning(90, 90, 4, 90, 90, 4)
+        turning(27, 140, 4, 160, 140, 4)
     elif(localItem == 'red_bucketArch' and shared.current_step==6):
         print("Evading RedBucket")
+        # drives forward like a madman, no outside distractions
+        shared.myKit.servo[0].angle = 90
+        shared.myKit.servo[1].angle = 142
+        time.sleep(5)
         shared.current_step += 1
         shared.evasionType = 4
     else:
