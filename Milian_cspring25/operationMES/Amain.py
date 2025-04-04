@@ -77,6 +77,7 @@ while True:
 
 #this is the filter
     if detections:
+        shared.detection = True
         best_detections = {}
         for detect in detections:
             class_name = net.GetClassDesc(detect.ClassID)
@@ -161,9 +162,12 @@ while True:
             else:
                 shared.bigContours = False  
                 shared.myKit.servo[1].angle = 90  
-    elif not detections and not contours and not shared.evading:  
+    elif not detections and not contours and not shared.evading: 
+        '''
         shared.myKit.servo[1].angle = 90  
-        searching()
+        searching()   
+        ''' 
+ 
 
     # Second Camera
     img2 = camera2.Capture()

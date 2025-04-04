@@ -2,6 +2,7 @@ class SharedState:
     def __init__(self):
         self.myKit = None
         self.evading = False
+        self.orbiting = False
         self.looking = False
         self.search_thread = None
         self.steeringServoVal = 0
@@ -14,7 +15,8 @@ class SharedState:
         self.Pconstant = 1.0
         self.Dconstant = 1.0
         self.lastItem = None
-        self.evasionType = 0        
+        self.evasionType = 0     
+        self.detection = False   
         self.bigContours = False    
         self.bigContours2 = False    
         self.turningleft = False     
