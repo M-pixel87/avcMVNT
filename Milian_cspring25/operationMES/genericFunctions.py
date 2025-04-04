@@ -100,7 +100,7 @@ def orbit(dir):
             break
         #Turning numbers are to be adjusted
         if(dir == 'left'):
-            turning(180, 130, 3, 27, 132, 12, 90, 132, 5)
+            turning(85, 130, 5, 153, 132, 4, 90, 132, 5)
         elif(dir == 'right'):
             turning(95, 132, 5, 27, 132, 4, 85, 132, 5)
         
