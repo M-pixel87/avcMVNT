@@ -116,7 +116,7 @@ while True:
     l_b2 = np.array([hue2Low, Ls, Lv])
     u_b2 = np.array([hue2Up, Us, Uv])
 
-    if shared.current_step % 2 != 0:  
+    if shared.current_step % 2 != 0: # Blue Bucket 
         l_b = np.array([0, 146, 106])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([89, 146, 106])
@@ -199,17 +199,14 @@ while True:
             errorPan2 = objx2 - img2.width / 2
             errorTilt2 = objy2 - img2.height / 2
 
-
-            elif abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
-                buttonstate_state = GPIO.input('GP49_SPI1_MOSI') # HANDLES The lidar detection
-                if buttonstate_state == 1 and not shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] != shared.current_step:
-                    evasion(class_name2)
-
-
             if shared.looking==True or shared.AiHUDkey==True:  # Fixed syntax
                 AisearchStopTrigger(class_name2, shared.current_step)  # Fixed variable name
                 if shared.looking == False:
                     AiHUDcamAlign(shared.angle, class_name2, shared.current_step, errorPan2, errorTilt2)
+            elif abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
+                buttonstate_state = GPIO.input('GP49_SPI1_MOSI') # HANDLES The lidar detection
+                if buttonstate_state == 1 and not shared.evading and not shared.looking and (shared.target_conditions['red_bucketArch'] != shared.current_step and shared.target_conditions['ramp'] != shared.current_step):
+                    evasion(class_name2)
 
     hsv2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2HSV)
     if shared.current_step % 2 != 0:  
@@ -251,7 +248,8 @@ while True:
                 errorTilt2 = objY - height2 / 2                
                 if abs(errorPan2) > 40 and shared.pigsfly == 0 and not shared.evading and not shared.AiHUDkey:
                     CVCamTarget(errorPan2, errorTilt2)
-                if w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
+                    #IF large enough/hopefully close enough, evade for red_bucketArch (now also checks if centered)
+                if abs(errorPan2) <= 40 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
                     evasion(class_name2) 
             else:
                 shared.bigContours2 = False  

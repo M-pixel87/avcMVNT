@@ -16,6 +16,7 @@ def ESCWaitFunction():
             shared.myKit.servo[1].angle = 90
             time.sleep(1)
 
+#DEPRECATED FUNCTION
 def searching():
     if shared.search_thread and shared.search_thread.is_alive():
         #print("Search thread already running. Skipping new search.")
@@ -45,20 +46,23 @@ def searching():
     
     shared.search_thread = threading.Thread(target=look_Around)
     shared.search_thread.start()
+#---------------------------------------------------
 
-    
 
+#ONE QUIRK: i moved all of the servo controlls into the turn_Stop function , because before the first turn was not threaded
+
+#Direction dictates orbit direction. hopefully orbit will not be needed
 def turning(angle, speed, duration, angle2, speed2, duration2, direction):
     shared.evading = True
-    shared.myKit.servo[0].angle = angle
-    shared.myKit.servo[1].angle = speed
-    shared.myKit.servo[2].angle = 90
-    shared.myKit.servo[3].angle = 90
-    time.sleep(duration)
-    shared.myKit.servo[0].angle = angle2
-    shared.myKit.servo[1].angle = speed2
-    time.sleep(duration2/2)
     def turn_and_stop():
+        shared.myKit.servo[0].angle = angle
+        shared.myKit.servo[1].angle = speed
+        shared.myKit.servo[2].angle = 90
+        shared.myKit.servo[3].angle = 90
+        time.sleep(duration)
+        shared.myKit.servo[0].angle = angle2
+        shared.myKit.servo[1].angle = speed2
+        time.sleep(duration2/2)
         time.sleep(duration2/2)
         shared.myKit.servo[0].angle = 90
         shared.myKit.servo[1].angle = 90
@@ -126,23 +130,21 @@ def evasion(localItem):
         print("Evading BlueBucket")
         shared.current_step += 1
         shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right")
+        turning(180, 130, 2, 27, 132, 8, "right") # To be adjusted
 
     if(localItem == 'blue_bucket' and shared.current_step == 5):
         print("Evading BlueBucket")
         shared.current_step += 1
         shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right")
+        turning(180, 130, 2, 27, 132, 8, "right") # To be adjusted
 
     if(localItem == 'blue_bucket' and shared.current_step == 7):
         print("Evading BlueBucket")
         shared.current_step += 1
         shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right")
+        turning(180, 130, 2, 27, 132, 8, "right") # To be adjusted
 
 #end of additions meant to do the blue evading with tweeks on the postion of the blue bucket
-
-
 
 
 
@@ -155,8 +157,8 @@ def evasion(localItem):
 
 
     elif(localItem == 'ramp' and shared.current_step==4):
-        print("Evading RedBucket")
-        # drives forward like a madman, no outside distractions
+        print("Evading ramp")
+        # This holds same function as using a turning method but not threaded , therefore no outside interference
         shared.myKit.servo[0].angle = 160
         shared.myKit.servo[1].angle = 142
         time.sleep(5)
@@ -171,13 +173,11 @@ def evasion(localItem):
     elif(localItem == 'red_bucketArch' and shared.current_step==6):
         print("Evading RedBucket")
         # drives forward like a madman, no outside distractions
-        shared.myKit.servo[0].angle = 96
+        shared.myKit.servo[0].angle = 92
         shared.myKit.servo[1].angle = 142
         time.sleep(5)
         shared.current_step += 1
-        #shared.evasionType = 6 i dont know this use
-
-
+        #shared.evasionType = 6 i  * EVASION TYPE IS A DEPRECIATED VARIABLE (NO USE) * 
 
     else:
         print("This action and level shouldnt happend")
