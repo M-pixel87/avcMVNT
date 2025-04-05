@@ -55,10 +55,10 @@ def turning(angle, speed, duration, angle2, speed2, duration2, direction):
     shared.myKit.servo[2].angle = 90
     shared.myKit.servo[3].angle = 90
     time.sleep(duration)
+    shared.myKit.servo[0].angle = angle2
+    shared.myKit.servo[1].angle = speed2
+    time.sleep(duration2/2)
     def turn_and_stop():
-        shared.myKit.servo[0].angle = angle2
-        shared.myKit.servo[1].angle = speed2
-        time.sleep(duration2/2)
         time.sleep(duration2/2)
         shared.myKit.servo[0].angle = 90
         shared.myKit.servo[1].angle = 90
@@ -75,13 +75,10 @@ def turningOrbit(angle, speed, duration, angle2, speed2, duration2, angle3, spee
     shared.myKit.servo[2].angle = 90
     shared.myKit.servo[3].angle = 90
     time.sleep(duration)
+    shared.myKit.servo[0].angle = angle2#d
+    shared.myKit.servo[1].angle = speed2#d
+    time.sleep(duration2)#d
     def turn_and_stop():
-        shared.myKit.servo[0].angle = angle2
-        shared.myKit.servo[1].angle = speed2
-        time.sleep(duration2/2)
-        if(shared.detection == True):
-            return
-        time.sleep(duration2/2)
         shared.myKit.servo[0].angle = angle3
         shared.myKit.servo[1].angle = speed3
         time.sleep(duration3/2)
@@ -92,7 +89,14 @@ def turningOrbit(angle, speed, duration, angle2, speed2, duration2, angle3, spee
         shared.myKit.servo[1].angle = 90
     threading.Thread(target=turn_and_stop).start()
 
+#what i changed here is that i moved the d part into that a 
+#spce where its locked and cant do anything idea is that this will filterbad reading
 
+
+
+
+
+#beautifull loop
 def orbit(dir):
     shared.orbiting = True
     while(shared.orbiting == True):
@@ -107,30 +111,74 @@ def orbit(dir):
 
 def evasion(localItem):
     shared.evading = True
-    if(localItem == 'blue_bucket' and shared.current_step % 2 != 0):
+
+
+
+#addition meant to do the blue evading with tweeks on the postion of the blue bucket
+
+    if(localItem == 'blue_bucket' and shared.current_step == 1):
         print("Evading BlueBucket")
         shared.current_step += 1
         shared.evasionType = 1
         turning(180, 130, 2, 27, 132, 8, "right")
+
+    if(localItem == 'blue_bucket' and shared.current_step == 3):
+        print("Evading BlueBucket")
+        shared.current_step += 1
+        shared.evasionType = 1
+        turning(180, 130, 2, 27, 132, 8, "right")
+
+    if(localItem == 'blue_bucket' and shared.current_step == 5):
+        print("Evading BlueBucket")
+        shared.current_step += 1
+        shared.evasionType = 1
+        turning(180, 130, 2, 27, 132, 8, "right")
+
+    if(localItem == 'blue_bucket' and shared.current_step == 7):
+        print("Evading BlueBucket")
+        shared.current_step += 1
+        shared.evasionType = 1
+        turning(180, 130, 2, 27, 132, 8, "right")
+
+#end of additions meant to do the blue evading with tweeks on the postion of the blue bucket
+
+
+
+
+
     elif(localItem == 'yellow_bucket' and shared.current_step== 2):
         print("Evading YellowBucket")
         shared.current_step += 1
         shared.evasionType = 2
         turning(27, 130, 3, 170, 132, 8, "left")
+
+
+
     elif(localItem == 'ramp' and shared.current_step==4):
-        print("mama im scared i dont want to jump")
-        shared.current_step += 1
-        shared.evasionType = 3
-        turning(27, 140, 4, 160, 140, 4)
-    elif(localItem == 'red_bucketArch' and shared.current_step==6):
         print("Evading RedBucket")
         # drives forward like a madman, no outside distractions
-        shared.myKit.servo[0].angle = 90
+        shared.myKit.servo[0].angle = 160
+        shared.myKit.servo[1].angle = 142
+        time.sleep(5)
+        shared.myKit.servo[0].angle = 35
         shared.myKit.servo[1].angle = 142
         time.sleep(5)
         shared.current_step += 1
-        shared.evasionType = 4
+        #shared.evasionType = 4
+
+
+
+    elif(localItem == 'red_bucketArch' and shared.current_step==6):
+        print("Evading RedBucket")
+        # drives forward like a madman, no outside distractions
+        shared.myKit.servo[0].angle = 96
+        shared.myKit.servo[1].angle = 142
+        time.sleep(5)
+        shared.current_step += 1
+        #shared.evasionType = 6 i dont know this use
+
+
+
     else:
-        print("NOTBUILTYET")
-        #shared.evasionType = 0
-        #defaultEvade()
+        print("This action and level shouldnt happend")
+ 

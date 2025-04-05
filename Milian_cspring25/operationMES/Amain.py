@@ -96,7 +96,7 @@ while True:
             objx = left + (w / 2)
             errorPan = objx - img.width / 2
             if not shared.evading and not shared.looking:
-                shared.AiHUDkey = False  # Fixed assignment
+                #shared.AiHUDkey = False  # Fixed assignment
                 AiAlignment(class_name, errorPan, shared.current_step)
             elif shared.evading and not shared.AiHUDkey:
                 AiTurnStopErly(class_name, shared.current_step, errorPan)
@@ -198,12 +198,14 @@ while True:
             objy2 = top2 + (h2 / 2)          
             errorPan2 = objx2 - img2.width / 2
             errorTilt2 = objy2 - img2.height / 2
-            if not shared.evading and shared.target_conditions['red_bucketArch'] != shared.current_step and not shared.AiHUDkey:
-                AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)
-            if abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
+
+
+            elif abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI') # HANDLES The lidar detection
                 if buttonstate_state == 1 and not shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] != shared.current_step:
                     evasion(class_name2)
+
+
             if shared.looking==True or shared.AiHUDkey==True:  # Fixed syntax
                 AisearchStopTrigger(class_name2, shared.current_step)  # Fixed variable name
                 if shared.looking == False:
