@@ -52,8 +52,13 @@ def searching():
 #ONE QUIRK: i moved all of the servo controlls into the turn_Stop function , because before the first turn was not threaded
 
 #Direction dictates orbit direction. hopefully orbit will not be needed
-def turning(angle, speed, duration, angle2, speed2, duration2, direction):
+def turningFirstTime(angle, speed, duration, angle2, speed2, duration2, direction):
     shared.evading = True
+
+     #_________________________________MMchange___________________________________________________
+    shared.AiHUDkey = True #turns on the lock 
+    #_________________________________MMchange___________________________________________________
+
     def turn_and_stop():
         shared.myKit.servo[0].angle = angle
         shared.myKit.servo[1].angle = speed
@@ -64,6 +69,13 @@ def turning(angle, speed, duration, angle2, speed2, duration2, direction):
         shared.myKit.servo[1].angle = speed2
         time.sleep(duration2/2)
         time.sleep(duration2/2)
+
+
+  #_________________________________MMchange___________________________________________________
+
+        shared.AiHUDkey = False #disables the lock to continue normal operation of stoping early 
+ #_________________________________MMchange___________________________________________________
+
         shared.myKit.servo[0].angle = 90
         shared.myKit.servo[1].angle = 90
         shared.evading = False
@@ -74,6 +86,10 @@ def turning(angle, speed, duration, angle2, speed2, duration2, direction):
 
 #THIS IS ONLY FOR ORBIT, SHARED.EVADING IS REMOVED 3 STEPS
 def turningOrbit(angle, speed, duration, angle2, speed2, duration2, angle3, speed3, duration3):
+
+     #_________________________________MMchange___________________________________________________
+    shared.AiHUDkey = True #turns on the lock this will allow for the screen to continue showing if wanted
+    #_________________________________MMchange___________________________________________________
     shared.myKit.servo[0].angle = angle
     shared.myKit.servo[1].angle = speed
     shared.myKit.servo[2].angle = 90
@@ -83,6 +99,12 @@ def turningOrbit(angle, speed, duration, angle2, speed2, duration2, angle3, spee
     shared.myKit.servo[1].angle = speed2#d
     time.sleep(duration2)#d
     def turn_and_stop():
+
+
+  #_________________________________MMchange___________________________________________________
+
+        shared.AiHUDkey = False #disables the lock to continue normal operation of stoping early just and idea everyhing would need be moved inside tho
+ #_________________________________MMchange___________________________________________________
         shared.myKit.servo[0].angle = angle3
         shared.myKit.servo[1].angle = speed3
         time.sleep(duration3/2)
@@ -123,26 +145,26 @@ def evasion(localItem):
     if(localItem == 'blue_bucket' and shared.current_step == 1):
         print("Evading BlueBucket")
         shared.current_step += 1
-        shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right")
+        #shared.evasionType = 1
+        turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
 
     if(localItem == 'blue_bucket' and shared.current_step == 3):
         print("Evading BlueBucket")
         shared.current_step += 1
-        shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right") # To be adjusted
+        #shared.evasionType = 3
+        turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
 
     if(localItem == 'blue_bucket' and shared.current_step == 5):
         print("Evading BlueBucket")
         shared.current_step += 1
-        shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right") # To be adjusted
+        #shared.evasionType = 4
+        turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
 
     if(localItem == 'blue_bucket' and shared.current_step == 7):
         print("Evading BlueBucket")
         shared.current_step += 1
-        shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right") # To be adjusted
+        #shared.evasionType = 7
+        turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
 
 #end of additions meant to do the blue evading with tweeks on the postion of the blue bucket
 

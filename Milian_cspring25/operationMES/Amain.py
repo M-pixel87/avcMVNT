@@ -98,8 +98,18 @@ while True:
             if not shared.evading and not shared.looking:
                 #shared.AiHUDkey = False  # Fixed assignment
                 AiAlignment(class_name, errorPan, shared.current_step)
+
+
+               #_________________________________MMchange___________________________________________________
+                
             elif shared.evading and not shared.AiHUDkey:
-                AiTurnStopErly(class_name, shared.current_step, errorPan)
+                AiTurnStopErly(class_name, shared.current_step, errorPan) #ill be using the AI hudkey to lock us the
+                #first time from getting reading early one 
+               #_________________________________MMchange____________________________________________________
+
+
+
+
 
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     hueLow = cv2.getTrackbarPos('hueLower', 'Trackbars')
@@ -128,13 +138,13 @@ while True:
         l_b2 = np.array([10, 135, 221])
         u_b2 = np.array([68, 255, 255])
 
-    if shared.target_conditions['ramp'] == shared.current_step:
+    if shared.target_conditions['ramp'] == shared.current_step: #add the color
         l_b = np.array([0, 146, 106])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([10, 135, 221])
         u_b2 = np.array([68, 255, 255]) 
 
-    if shared.target_conditions['red_bucketArch'] == shared.current_step:  # Fixed key
+    if shared.target_conditions['red_bucketArch'] == shared.current_step:  # make impostibel color
         l_b = np.array([0, 146, 106])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([10, 135, 221])
@@ -154,7 +164,7 @@ while True:
                 objX = x + w / 2  
                 errorPan = objX - (img.width / 2)
                 if abs(errorPan) > 40 and shared.pigsfly == 0 and not shared.evading: 
-                    shared.AiHUDkey = False  # Fixed assignment
+                    shared.AiHUDkey = False  
                     CVAlignment(errorPan)
                 elif shared.evading:  
                     CVTurnStopErly(errorPan)
@@ -199,12 +209,12 @@ while True:
             errorPan2 = objx2 - img2.width / 2
             errorTilt2 = objy2 - img2.height / 2
 
-            if shared.looking==True or shared.AiHUDkey==True:  # Fixed syntax
-                AisearchStopTrigger(class_name2, shared.current_step)  # Fixed variable name
+            if shared.looking==True or shared.AiHUDkey==True:  
+                AisearchStopTrigger(class_name2, shared.current_step)  
                 if shared.looking == False:
                     AiHUDcamAlign(shared.angle, class_name2, shared.current_step, errorPan2, errorTilt2)
-            elif abs(errorPan2) < 100 and not shared.AiHUDkey:  # Fixed variable name
-                buttonstate_state = GPIO.input('GP49_SPI1_MOSI') # HANDLES The lidar detection
+            elif abs(errorPan2) < 100 and not shared.AiHUDkey:  
+                buttonstate_state = GPIO.input('GP49_SPI1_MOSI') 
                 if buttonstate_state == 1 and not shared.evading and not shared.looking and (shared.target_conditions['red_bucketArch'] != shared.current_step and shared.target_conditions['ramp'] != shared.current_step):
                     evasion(class_name2)
 
@@ -247,10 +257,14 @@ while True:
                 errorPan2 = objX - width2 / 2
                 errorTilt2 = objY - height2 / 2                
                 if abs(errorPan2) > 40 and shared.pigsfly == 0 and not shared.evading and not shared.AiHUDkey:
-                    CVCamTarget(errorPan2, errorTilt2)
-                    #IF large enough/hopefully close enough, evade for red_bucketArch (now also checks if centered)
-                if abs(errorPan2) <= 40 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
-                    evasion(class_name2) 
+                    CVCamTarget(errorPan2, errorTilt2)               
+               
+               #_________________________________MMchange____________________________________________________
+                #if abs(errorPan2) <= 40 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
+                   # evasion(class_name2)  if im reading right this seems to be a trigger for the cv when up close itll always read in theory so this should not happen
+
+               #_________________________________MMchange____________________________________________________
+
             else:
                 shared.bigContours2 = False  
                 shared.myKit.servo[1].angle = 90  
