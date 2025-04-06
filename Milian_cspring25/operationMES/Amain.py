@@ -107,6 +107,11 @@ while True:
                 #first time from getting reading early one 
                #_________________________________MMchange____________________________________________________
 
+               #HR CHANGE   : I beleive this is where the evasion was supposed to be. This is how the evade for red bucket is called.
+               # If this code doesnt exist the red bucket evade wouldnt kick , I think? Lmk if this is wrong.
+            if abs(errorPan) <= 40 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
+                evasion(class_name)
+
 
 
 
@@ -144,7 +149,7 @@ while True:
         l_b2 = np.array([10, 135, 221])
         u_b2 = np.array([68, 255, 255]) 
 
-    if shared.target_conditions['red_bucketArch'] == shared.current_step:  # make impostibel color
+    if shared.target_conditions['red_bucketArch'] == shared.current_step:  # make impossible color
         l_b = np.array([0, 146, 106])
         u_b = np.array([0, 255, 255])
         l_b2 = np.array([10, 135, 221])
@@ -258,12 +263,6 @@ while True:
                 errorTilt2 = objY - height2 / 2                
                 if abs(errorPan2) > 40 and shared.pigsfly == 0 and not shared.evading and not shared.AiHUDkey:
                     CVCamTarget(errorPan2, errorTilt2)               
-               
-               #_________________________________MMchange____________________________________________________
-                #if abs(errorPan2) <= 40 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
-                   # evasion(class_name2)  if im reading right this seems to be a trigger for the cv when up close itll always read in theory so this should not happen
-
-               #_________________________________MMchange____________________________________________________
 
             else:
                 shared.bigContours2 = False  

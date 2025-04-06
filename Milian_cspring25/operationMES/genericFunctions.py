@@ -55,9 +55,7 @@ def searching():
 def turningFirstTime(angle, speed, duration, angle2, speed2, duration2, direction):
     shared.evading = True
 
-     #_________________________________MMchange___________________________________________________
     shared.AiHUDkey = True #turns on the lock 
-    #_________________________________MMchange___________________________________________________
 
     def turn_and_stop():
         shared.myKit.servo[0].angle = angle
@@ -70,11 +68,7 @@ def turningFirstTime(angle, speed, duration, angle2, speed2, duration2, directio
         time.sleep(duration2/2)
         time.sleep(duration2/2)
 
-
-  #_________________________________MMchange___________________________________________________
-
         shared.AiHUDkey = False #disables the lock to continue normal operation of stoping early 
- #_________________________________MMchange___________________________________________________
 
         shared.myKit.servo[0].angle = 90
         shared.myKit.servo[1].angle = 90
@@ -84,12 +78,11 @@ def turningFirstTime(angle, speed, duration, angle2, speed2, duration2, directio
         #print('\nDONE EVADING\n')
     threading.Thread(target=turn_and_stop).start()
 
-#THIS IS ONLY FOR ORBIT, SHARED.EVADING IS REMOVED 3 STEPS
+#THIS IS ONLY FOR ORBIT, SHARED.EVADING IS REMOVED, 3 STEPS
 def turningOrbit(angle, speed, duration, angle2, speed2, duration2, angle3, speed3, duration3):
 
-     #_________________________________MMchange___________________________________________________
     shared.AiHUDkey = True #turns on the lock this will allow for the screen to continue showing if wanted
-    #_________________________________MMchange___________________________________________________
+
     shared.myKit.servo[0].angle = angle
     shared.myKit.servo[1].angle = speed
     shared.myKit.servo[2].angle = 90
@@ -101,10 +94,7 @@ def turningOrbit(angle, speed, duration, angle2, speed2, duration2, angle3, spee
     def turn_and_stop():
 
 
-  #_________________________________MMchange___________________________________________________
-
         shared.AiHUDkey = False #disables the lock to continue normal operation of stoping early just and idea everyhing would need be moved inside tho
- #_________________________________MMchange___________________________________________________
         shared.myKit.servo[0].angle = angle3
         shared.myKit.servo[1].angle = speed3
         time.sleep(duration3/2)
