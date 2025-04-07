@@ -15,6 +15,7 @@ def ESCWaitFunction():
             #print("Input pin is LOW, don't move yet")
             shared.myKit.servo[1].angle = 90
             time.sleep(1)
+    
 
 #DEPRECATED FUNCTION
 def searching():
@@ -52,7 +53,7 @@ def searching():
 #ONE QUIRK: i moved all of the servo controlls into the turn_Stop function , because before the first turn was not threaded
 
 #Direction dictates orbit direction. hopefully orbit will not be needed
-def turningFirstTime(angle, speed, duration, angle2, speed2, duration2, direction):
+def turning(angle, speed, duration, angle2, speed2, duration2, direction):
     shared.evading = True
 
     shared.AiHUDkey = True #turns on the lock 
@@ -136,7 +137,7 @@ def evasion(localItem):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
+        turning(180, 130, 2, 27, 132, 10, "right") #remeber to fix values before real run
 
     if(localItem == 'blue_bucket' and shared.current_step == 3):
         print("Evading BlueBucket")

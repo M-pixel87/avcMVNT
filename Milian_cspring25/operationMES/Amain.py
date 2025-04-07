@@ -27,8 +27,8 @@ shared.myKit.servo[0].angle = 90
 
 # Initialize network and cameras
 net = jetson.inference.detectNet(
-    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_hone/ssd-mobilenet.onnx",
-    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_hone/labels.txt",
+    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_none/ssd-mobilenet.onnx",
+    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_none/labels.txt",
     input_blob="input_0",
     output_cvg="scores",
     output_bbox="boxes",
@@ -55,10 +55,10 @@ cv2.createTrackbar('valHigh', 'Trackbars', 255, 255, nothing)
 cv2.namedWindow('detCam', cv2.WINDOW_NORMAL)
 cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 
-
+errorPan = 0
 
 ESCWaitFunction()
-
+time.sleep(1)
 # Main loop
 while True:
 
@@ -106,7 +106,10 @@ while True:
                 AiTurnStopErly(class_name, shared.current_step, errorPan) #ill be using the AI hudkey to lock us the
                 #first time from getting reading early one 
                #_________________________________MMchange____________________________________________________
-
+            if(abs(errorPan) < 100 and not shared.AiHUDkey):  
+                buttonstate_state = GPIO.input('GP49_SPI1_MOSI') 
+                if buttonstate_state == 1 and not shared.evading and not shared.looking and (shared.target_conditions['red_bucketArch'] != shared.current_step and shared.target_conditions['ramp'] != shared.current_step):
+                    evasion(class_name)
                #HR CHANGE   : I beleive this is where the evasion was supposed to be. This is how the evade for red bucket is called.
                # If this code doesnt exist the red bucket evade wouldnt kick , I think? Lmk if this is wrong.
             if abs(errorPan) <= 40 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
@@ -213,12 +216,17 @@ while True:
             objy2 = top2 + (h2 / 2)          
             errorPan2 = objx2 - img2.width / 2
             errorTilt2 = objy2 - img2.height / 2
+            AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)
 
+
+#HR CHANGES: I commented out AIHUDCAMALIGN, i dont beleive that function works
+# I beleive that here this is an possible issue: The evasion only triggers if semi centered on the top cam, we probably want it for bottom cam also. I think this is what causes it to not evade and go off the side.
             if shared.looking==True or shared.AiHUDkey==True:  
                 AisearchStopTrigger(class_name2, shared.current_step)  
                 if shared.looking == False:
-                    AiHUDcamAlign(shared.angle, class_name2, shared.current_step, errorPan2, errorTilt2)
-            elif abs(errorPan2) < 100 and not shared.AiHUDkey:  
+                    #AiHUDcamAlign(shared.angle, class_name2, shared.current_step, errorPan2, errorTilt2)
+                    pass
+            elif (abs(errorPan2) < 100 and not shared.AiHUDkey):  
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI') 
                 if buttonstate_state == 1 and not shared.evading and not shared.looking and (shared.target_conditions['red_bucketArch'] != shared.current_step and shared.target_conditions['ramp'] != shared.current_step):
                     evasion(class_name2)
