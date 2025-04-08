@@ -2,7 +2,7 @@ import math
 from globals import shared
 from genericFunctions import evasion
 
-def AiAlignment(class_name, errorPan, current_step):
+def AiAlignment(class_name, errorPan, current_step, w):
     if class_name == 'blue_bucket' and abs(errorPan) > 50 and current_step % 2 != 0:
         errorPan = math.ceil(errorPan / 14)
         shared.steeringServoVal = shared.Pconstant * (96 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
@@ -21,7 +21,7 @@ def AiAlignment(class_name, errorPan, current_step):
         shared.looking = False
         shared.search_thread = None
 
-    elif class_name == 'red_bucketArch' and abs(errorPan) > 50 and shared.target_conditions['red_bucketArch'] == current_step:
+    elif class_name == 'red_bucketArch' and abs(errorPan) < 20 and w > 100 and shared.target_conditions['red_bucketArch'] == current_step:
         errorPan = math.ceil(errorPan / 14)
         shared.steeringServoVal = shared.Pconstant * (96 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal

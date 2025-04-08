@@ -188,7 +188,7 @@ def evasion(localItem):
         # drives forward like a madman, no outside distractions
         shared.myKit.servo[0].angle = 92
         shared.myKit.servo[1].angle = 142
-        time.sleep(5)
+        time.sleep(7)
         shared.current_step += 1
         #shared.evasionType = 6 i  * EVASION TYPE IS A DEPRECIATED VARIABLE (NO USE) * 
 

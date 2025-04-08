@@ -27,8 +27,8 @@ shared.myKit.servo[0].angle = 90
 
 # Initialize network and cameras
 net = jetson.inference.detectNet(
-    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_none/ssd-mobilenet.onnx",
-    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_none/labels.txt",
+    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_qone/ssd-mobilenet.onnx",
+    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_qone/labels.txt",
     input_blob="input_0",
     output_cvg="scores",
     output_bbox="boxes",
@@ -97,7 +97,7 @@ while True:
             errorPan = objx - img.width / 2
             if not shared.evading and not shared.looking:
                 #shared.AiHUDkey = False  # Fixed assignment
-                AiAlignment(class_name, errorPan, shared.current_step)
+                AiAlignment(class_name, errorPan, shared.current_step, w)
 
 
                #_________________________________MMchange___________________________________________________
@@ -110,10 +110,10 @@ while True:
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI') 
                 if buttonstate_state == 1 and not shared.evading and not shared.looking and (shared.target_conditions['red_bucketArch'] != shared.current_step and shared.target_conditions['ramp'] != shared.current_step):
                     evasion(class_name)
-               #HR CHANGE   : I beleive this is where the evasion was supposed to be. This is how the evade for red bucket is called.
-               # If this code doesnt exist the red bucket evade wouldnt kick , I think? Lmk if this is wrong.
-            if abs(errorPan) <= 40 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
-                evasion(class_name)
+
+            # This is possibly redundant or unimportant, figure out after testing , w is used as a sort of closeness aproximation
+            #if abs(errorPan) < 70 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
+             #   evasion(class_name)
 
 
 
