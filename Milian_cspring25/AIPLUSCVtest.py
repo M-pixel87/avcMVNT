@@ -72,7 +72,7 @@ while True:
     detections = net.Detect(img)
     display.Render(img)
     
-    if detections:
+    if detections and pigsfly == 1:
         for detect in detections:
             ID = detect.ClassID
             top = int(detect.Top)
@@ -134,7 +134,7 @@ while True:
     detections2 = net.Detect(img2)
     display.Render(img2)
     
-    if detections2:
+    if detections2 and pigsfly == 1:
         for detect2 in detections2:
             ID2 = detect2.ClassID
             top2 = int(detect2.Top)

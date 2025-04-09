@@ -103,7 +103,8 @@ while True:
                #_________________________________MMchange___________________________________________________
                 
             elif shared.evading and not shared.AiHUDkey:
-                AiTurnStopErly(class_name, shared.current_step, errorPan) #ill be using the AI hudkey to lock us the
+                pass
+                #AiTurnStopErly(class_name, shared.current_step, errorPan) #ill be using the AI hudkey to lock us the
                 #first time from getting reading early one 
                #_________________________________MMchange____________________________________________________
             if(abs(errorPan) < 100 and not shared.AiHUDkey):  
@@ -178,13 +179,12 @@ while True:
                     CVTurnStopErly(errorPan)
                 break  
             else:
-                shared.bigContours = False  
-                shared.myKit.servo[1].angle = 90  
+                shared.bigContours = False    
     elif not detections and not contours and not shared.evading: 
-        '''
-        shared.myKit.servo[1].angle = 90  
-        searching()   
-        ''' 
+        if(shared.current_step % 2 != 0):
+            shared.myKit.servo[0].angle = 50
+        else:
+            shared.myKit.servo[0].angle = 120
  
 
     # Second Camera
@@ -274,7 +274,6 @@ while True:
 
             else:
                 shared.bigContours2 = False  
-                shared.myKit.servo[1].angle = 90  
             break  # Fixed indentation
 
     # Status display

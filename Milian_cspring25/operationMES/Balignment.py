@@ -5,7 +5,7 @@ from genericFunctions import evasion
 def AiAlignment(class_name, errorPan, current_step, w):
     if class_name == 'blue_bucket' and abs(errorPan) > 50 and current_step % 2 != 0:
         errorPan = math.ceil(errorPan / 14)
-        shared.steeringServoVal = shared.Pconstant * (96 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
+        shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
         shared.myKit.servo[1].angle = 146
         shared.pastSteeringServoVal = shared.steeringServoVal
@@ -14,16 +14,16 @@ def AiAlignment(class_name, errorPan, current_step, w):
 
     elif class_name == 'yellow_bucket' and abs(errorPan) > 50 and shared.target_conditions['yellow_bucket'] == current_step:
         errorPan = math.ceil(errorPan / 14)
-        shared.steeringServoVal = shared.Pconstant * (96 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
+        shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
         shared.myKit.servo[1].angle = 146
         shared.pastSteeringServoVal = shared.steeringServoVal
         shared.looking = False
         shared.search_thread = None
 
-    elif class_name == 'red_bucketArch' and abs(errorPan) < 20 and w > 100 and shared.target_conditions['red_bucketArch'] == current_step:
+    elif class_name == 'red_bucketArch' and abs(errorPan) < 20 and w > 600 and shared.target_conditions['red_bucketArch'] == current_step:
         errorPan = math.ceil(errorPan / 14)
-        shared.steeringServoVal = shared.Pconstant * (96 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
+        shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
         shared.myKit.servo[1].angle = 146
         shared.pastSteeringServoVal = shared.steeringServoVal
@@ -35,7 +35,7 @@ def AiAlignment(class_name, errorPan, current_step, w):
 
     elif class_name == 'ramp' and abs(errorPan) > 50 and shared.target_conditions['ramp'] == current_step:
         errorPan = math.ceil(errorPan / 14)
-        shared.steeringServoVal = shared.Pconstant * (96 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
+        shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
         shared.myKit.servo[1].angle = 146
         shared.pastSteeringServoVal = shared.steeringServoVal
@@ -48,7 +48,7 @@ def AiAlignment(class_name, errorPan, current_step, w):
 
 def CVAlignment(errorPan):
         errorPan = math.ceil(errorPan / 14)
-        shared.steeringServoVal = shared.Pconstant * (96 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
+        shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
         shared.myKit.servo[1].angle = 146
         shared.pastSteeringServoVal = shared.steeringServoVal

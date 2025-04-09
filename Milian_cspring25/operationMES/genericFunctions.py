@@ -70,12 +70,10 @@ def turning(angle, speed, duration, angle2, speed2, duration2, direction):
         time.sleep(duration2/2)
 
         shared.AiHUDkey = False #disables the lock to continue normal operation of stoping early 
-
-        shared.myKit.servo[0].angle = 90
-        shared.myKit.servo[1].angle = 90
         shared.evading = False
         if(not shared.detection):
-            orbit(direction)
+            pass
+            #orbit(direction)
         #print('\nDONE EVADING\n')
     threading.Thread(target=turn_and_stop).start()
 
@@ -165,7 +163,7 @@ def evasion(localItem):
         print("Evading YellowBucket")
         shared.current_step += 1
         shared.evasionType = 2
-        turning(27, 130, 3, 170, 132, 4, "left")
+        turning(27, 130, 3, 170, 132, 5, "left")
 
 
 
