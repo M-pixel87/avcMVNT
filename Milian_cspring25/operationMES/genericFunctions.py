@@ -170,12 +170,12 @@ def evasion(localItem):
     elif(localItem == 'ramp' and shared.current_step==4):
         print("Evading ramp")
         # This holds same function as using a turning method but not threaded , therefore no outside interference
-        shared.myKit.servo[0].angle = 95
+        shared.myKit.servo[0].angle = 110
         shared.myKit.servo[1].angle = 142
-        time.sleep(5)
-        shared.myKit.servo[0].angle = 85
+        time.sleep(6)
+        shared.myKit.servo[0].angle = 75
         shared.myKit.servo[1].angle = 142
-        time.sleep(5)
+        time.sleep(6)
         shared.current_step += 1
         #shared.evasionType = 4
 
