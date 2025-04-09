@@ -13,7 +13,7 @@ from genericFunctions import ESCWaitFunction, searching, turning, evasion
 from Balignment import AiAlignment, CVAlignment, AiCamTarget, CVCamTarget, AiTurnStopErly,CVTurnStopErly, AiHUDcamAlign, AisearchStopTrigger
 
 
-
+  
 # Initialize hardware once
 GPIO.setmode(GPIO.TEGRA_SOC)
 GPIO.setup('GP49_SPI1_MOSI', GPIO.IN)
