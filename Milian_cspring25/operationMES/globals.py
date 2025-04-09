@@ -11,7 +11,7 @@ class SharedState:
         self.yaxiscam = 90
         self.onbutton = 0
         self.pigsfly = 0
-        self.current_step = 1
+        self.current_step = 4
         self.Pconstant = 1.0
         self.Dconstant = 1.0
         self.lastItem = None

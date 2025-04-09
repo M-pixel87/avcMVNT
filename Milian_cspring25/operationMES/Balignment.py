@@ -72,7 +72,7 @@ def AiCamTarget(class_name2, current_step, errorPan2, errorTilt2):
                 shared.yaxiscam += 1
             elif errorTilt2 < 0 and shared.yaxiscam > 0: 
                 shared.yaxiscam -= 1 
-            shared.myKit.servo[2].angle = shared.yaxiscam
+            #shared.myKit.servo[2].angle = shared.yaxiscam
 
     if class_name2 == 'yellow_bucket' and shared.target_conditions['yellow_bucket'] == shared.current_step:
         shared.looking = False
@@ -88,7 +88,7 @@ def AiCamTarget(class_name2, current_step, errorPan2, errorTilt2):
                 shared.yaxiscam += 1
             elif errorTilt2 < 0 and shared.yaxiscam > 0: 
                 shared.yaxiscam -= 1 
-            shared.myKit.servo[2].angle = shared.yaxiscam
+            #shared.myKit.servo[2].angle = shared.yaxiscam
             
 
 def CVCamTarget(errorPan2, errorTilt2):
@@ -102,7 +102,7 @@ def CVCamTarget(errorPan2, errorTilt2):
         shared.yaxiscam += 1
     elif errorTilt2 < 0 and shared.yaxiscam > 0:
         shared.yaxiscam -= 1
-    shared.myKit.servo[2].angle = shared.yaxiscam
+    #shared.myKit.servo[2].angle = shared.yaxiscam
     #print(f"CAM2CLR CAMVALPAN: {shared.xaxiscam}  CAM2CLR CAMVALTILT: {shared.yaxiscam}")
 
 def AiTurnStopErly(item, current_step, errorPan):
@@ -170,7 +170,7 @@ def AiHUDcamAlign(startingAngle, class_name2, shared, errorPan2, errorTilt2):
             shared.yaxiscam += 1
         elif errorTilt2 < 0 and shared.yaxiscam > 0:
             shared.yaxiscam -= 1
-        shared.myKit.servo[2].angle = shared.yaxiscam
+        #shared.myKit.servo[2].angle = shared.yaxiscam
 
 
 

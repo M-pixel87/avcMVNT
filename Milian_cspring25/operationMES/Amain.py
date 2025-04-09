@@ -27,8 +27,8 @@ shared.myKit.servo[0].angle = 90
 
 # Initialize network and cameras
 net = jetson.inference.detectNet(
-    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_qone/ssd-mobilenet.onnx",
-    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_qone/labels.txt",
+    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_rone/ssd-mobilenet.onnx",
+    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_rone/labels.txt",
     input_blob="input_0",
     output_cvg="scores",
     output_bbox="boxes",
@@ -103,8 +103,8 @@ while True:
                #_________________________________MMchange___________________________________________________
                 
             elif shared.evading and not shared.AiHUDkey:
-                pass
-                #AiTurnStopErly(class_name, shared.current_step, errorPan) #ill be using the AI hudkey to lock us the
+                
+                AiTurnStopErly(class_name, shared.current_step, errorPan) #ill be using the AI hudkey to lock us the
                 #first time from getting reading early one 
                #_________________________________MMchange____________________________________________________
             if(abs(errorPan) < 100 and not shared.AiHUDkey):  
@@ -216,7 +216,8 @@ while True:
             objy2 = top2 + (h2 / 2)          
             errorPan2 = objx2 - img2.width / 2
             errorTilt2 = objy2 - img2.height / 2
-            AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)
+            if(shared.evading == False ):
+                AiCamTarget(class_name2, shared.current_step, errorPan2, errorTilt2)
 
 
 #HR CHANGES: I commented out AIHUDCAMALIGN, i dont beleive that function works
