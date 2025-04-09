@@ -29,7 +29,7 @@ def AiAlignment(class_name, errorPan, current_step, w):
         shared.pastSteeringServoVal = shared.steeringServoVal
         shared.looking = False
         shared.search_thread = None
-        if abs(errorPan) < 100 and w > 600:
+        if abs(errorPan) < 100 and w > 1000:
                 evasion(class_name)
 
 

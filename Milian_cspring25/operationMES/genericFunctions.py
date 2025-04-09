@@ -137,19 +137,19 @@ def evasion(localItem):
         #shared.evasionType = 1
         turning(180, 130, 2, 27, 132, 10, "right") #remeber to fix values before real run
 
-    if(localItem == 'blue_bucket' and shared.current_step == 3):
+    elif(localItem == 'blue_bucket' and shared.current_step == 3):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 3
         turning(180, 130, 2, 27, 132, 10, "right") #remeber to fix values before real run
 
-    if(localItem == 'blue_bucket' and shared.current_step == 5):
+    elif(localItem == 'blue_bucket' and shared.current_step == 5):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 4
         turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
 
-    if(localItem == 'blue_bucket' and shared.current_step == 7):
+    elif(localItem == 'blue_bucket' and shared.current_step == 7):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 7
@@ -173,9 +173,11 @@ def evasion(localItem):
         shared.myKit.servo[0].angle = 69
         shared.myKit.servo[1].angle = 142
         time.sleep(3)
-        shared.myKit.servo[0].angle = 125
+        shared.myKit.servo[0].angle = 135
         shared.myKit.servo[1].angle = 142
         time.sleep(2)
+        shared.myKit.servo[0].angle = 85
+        time.sleep(1)
         shared.current_step += 1
         #shared.evasionType = 4
 
@@ -186,10 +188,13 @@ def evasion(localItem):
         # drives forward like a madman, no outside distractions
         shared.myKit.servo[0].angle = 92
         shared.myKit.servo[1].angle = 142
-        time.sleep(7)
+        time.sleep(6)
         shared.current_step += 1
         #shared.evasionType = 6 i  * EVASION TYPE IS A DEPRECIATED VARIABLE (NO USE) * 
 
     else:
         print("This action and level shouldnt happend")
+        shared.myKit.servo[1].angle = 60
+        shared.myKit.servo[0].angle = 90
+       
  
