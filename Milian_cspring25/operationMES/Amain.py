@@ -12,7 +12,8 @@ from globals import shared
 from genericFunctions import ESCWaitFunction, searching, turning, evasion
 from Balignment import AiAlignment, CVAlignment, AiCamTarget, CVCamTarget, AiTurnStopErly,CVTurnStopErly, AiHUDcamAlign, AisearchStopTrigger
 
-
+# THIS IS FOR DISABLING EVASIONS: used for demonstrations : set to False for normal useage
+labotomy = False
   
 # Initialize hardware once
 GPIO.setmode(GPIO.TEGRA_SOC)
@@ -27,8 +28,8 @@ shared.myKit.servo[0].angle = 90
 
 # Initialize network and cameras
 net = jetson.inference.detectNet(
-    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_rone/ssd-mobilenet.onnx",
-    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_rone/labels.txt",
+    model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_sone/ssd-mobilenet.onnx",
+    labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_sone/labels.txt",
     input_blob="input_0",
     output_cvg="scores",
     output_bbox="boxes",
@@ -58,12 +59,15 @@ cv2.namedWindow('FGmaskComp', cv2.WINDOW_NORMAL)
 errorPan = 0
 
 ESCWaitFunction()
-time.sleep(1)
 # Main loop
 while True:
-
-
-
+    if(shared.current_step >= 8 and shared.evading == False):
+        shared.myKit.servo[0].angle  = 90
+        shared.myKit.servo[1].angle  = 90
+        shared.myKit.servo[2].angle  = 90
+        shared.myKit.servo[3].angle  = 90
+        time.sleep(1)
+        exit()
 
 #____________________________________________________________________________________________________________________________________
 #first Camera this cam only handels aligning the car with the bucket
@@ -107,10 +111,12 @@ while True:
                 AiTurnStopErly(class_name, shared.current_step, errorPan) #ill be using the AI hudkey to lock us the
                 #first time from getting reading early one 
                #_________________________________MMchange____________________________________________________
-            if(abs(errorPan) < 100 and not shared.AiHUDkey):  
+            if(abs(errorPan) < 100 and not shared.AiHUDkey and not labotomy): 
+                
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI') 
                 if buttonstate_state == 1 and not shared.evading and not shared.looking and (shared.target_conditions['red_bucketArch'] != shared.current_step and shared.target_conditions['ramp'] != shared.current_step):
                     evasion(class_name)
+                    
 
             # This is possibly redundant or unimportant, figure out after testing , w is used as a sort of closeness aproximation
             #if abs(errorPan) < 70 and w > 100 and shared.evading and not shared.looking and shared.target_conditions['red_bucketArch'] == shared.current_step and not shared.AiHUDkey:
@@ -227,10 +233,12 @@ while True:
                 if shared.looking == False:
                     #AiHUDcamAlign(shared.angle, class_name2, shared.current_step, errorPan2, errorTilt2)
                     pass
-            elif (abs(errorPan2) < 100 and not shared.AiHUDkey):  
+            elif (abs(errorPan2) < 100 and not shared.AiHUDkey and not labotomy):  
+                
                 buttonstate_state = GPIO.input('GP49_SPI1_MOSI') 
                 if buttonstate_state == 1 and not shared.evading and not shared.looking and (shared.target_conditions['red_bucketArch'] != shared.current_step and shared.target_conditions['ramp'] != shared.current_step):
                     evasion(class_name2)
+                    
 
     hsv2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2HSV)
     if shared.current_step % 2 != 0:  

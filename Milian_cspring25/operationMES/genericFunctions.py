@@ -10,6 +10,7 @@ def ESCWaitFunction():
         if buttonstate_state == GPIO.HIGH:
             #print("Input pin is HIGH! MVMNT start")
             shared.onbutton = 1
+            time.sleep(3)
             shared.myKit.servo[1].angle = 126  
         else:
             #print("Input pin is LOW, don't move yet")
@@ -135,25 +136,25 @@ def evasion(localItem):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 1
-        turning(180, 130, 2, 27, 132, 10, "right") #remeber to fix values before real run
+        turning(170, 140, 2, 27, 140, 10, "right") #remeber to fix values before real run
 
     elif(localItem == 'blue_bucket' and shared.current_step == 3):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 3
-        turning(180, 130, 2, 27, 132, 10, "right") #remeber to fix values before real run
+        turning(160, 140, 2, 27, 140, 10, "right") #remeber to fix values before real run
 
     elif(localItem == 'blue_bucket' and shared.current_step == 5):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 4
-        turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
+        turning(170, 140, 2, 27, 140, 8, "right") #remeber to fix values before real run
 
     elif(localItem == 'blue_bucket' and shared.current_step == 7):
         print("Evading BlueBucket")
         shared.current_step += 1
         #shared.evasionType = 7
-        turning(180, 130, 2, 27, 132, 8, "right") #remeber to fix values before real run
+        turning(180, 140, 2, 27, 140, 8, "right") #remeber to fix values before real run
 
 #end of additions meant to do the blue evading with tweeks on the postion of the blue bucket
 
@@ -163,7 +164,7 @@ def evasion(localItem):
         print("Evading YellowBucket")
         shared.current_step += 1
         shared.evasionType = 2
-        turning(27, 130, 3, 170, 132, 5, "left")
+        turning(27, 140, 2, 170, 140, 5, "left")
 
 
 
@@ -171,10 +172,10 @@ def evasion(localItem):
         print("Evading ramp")
         # This holds same function as using a turning method but not threaded , therefore no outside interference
         shared.myKit.servo[0].angle = 69
-        shared.myKit.servo[1].angle = 142
+        shared.myKit.servo[1].angle = 145
         time.sleep(3)
         shared.myKit.servo[0].angle = 135
-        shared.myKit.servo[1].angle = 142
+        shared.myKit.servo[1].angle = 145
         time.sleep(2)
         shared.myKit.servo[0].angle = 85
         time.sleep(1)
@@ -187,8 +188,11 @@ def evasion(localItem):
         print("Evading RedBucket")
         # drives forward like a madman, no outside distractions
         shared.myKit.servo[0].angle = 92
-        shared.myKit.servo[1].angle = 142
-        time.sleep(6)
+        shared.myKit.servo[1].angle = 145
+        time.sleep(4)
+        shared.myKit.servo[0].angle = 110
+        shared.myKit.servo[1].angle = 145
+        time.sleep(1)
         shared.current_step += 1
         #shared.evasionType = 6 i  * EVASION TYPE IS A DEPRECIATED VARIABLE (NO USE) * 
 

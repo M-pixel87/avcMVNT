@@ -7,7 +7,7 @@ def AiAlignment(class_name, errorPan, current_step, w):
         errorPan = math.ceil(errorPan / 14)
         shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
-        shared.myKit.servo[1].angle = 146
+        shared.myKit.servo[1].angle = 143
         shared.pastSteeringServoVal = shared.steeringServoVal
         shared.looking = False
         shared.search_thread = None
@@ -16,7 +16,7 @@ def AiAlignment(class_name, errorPan, current_step, w):
         errorPan = math.ceil(errorPan / 14)
         shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
-        shared.myKit.servo[1].angle = 146
+        shared.myKit.servo[1].angle = 143
         shared.pastSteeringServoVal = shared.steeringServoVal
         shared.looking = False
         shared.search_thread = None
@@ -25,7 +25,7 @@ def AiAlignment(class_name, errorPan, current_step, w):
         errorPan = math.ceil(errorPan / 14)
         shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
-        shared.myKit.servo[1].angle = 146
+        shared.myKit.servo[1].angle = 143
         shared.pastSteeringServoVal = shared.steeringServoVal
         shared.looking = False
         shared.search_thread = None
@@ -37,11 +37,11 @@ def AiAlignment(class_name, errorPan, current_step, w):
         errorPan = math.ceil(errorPan / 14)
         shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
-        shared.myKit.servo[1].angle = 146
+        shared.myKit.servo[1].angle = 143
         shared.pastSteeringServoVal = shared.steeringServoVal
         shared.looking = False
         shared.search_thread = None
-        if abs(errorPan) < 100 and w > 600:
+        if abs(errorPan) < 100 and w > 450:
                 evasion(class_name)
 
 
@@ -50,7 +50,7 @@ def CVAlignment(errorPan):
         errorPan = math.ceil(errorPan / 14)
         shared.steeringServoVal = shared.Pconstant * (95 - errorPan) - shared.Dconstant * ((shared.steeringServoVal - shared.pastSteeringServoVal) / 2)
         shared.myKit.servo[0].angle = shared.steeringServoVal
-        shared.myKit.servo[1].angle = 146
+        shared.myKit.servo[1].angle = 143
         shared.pastSteeringServoVal = shared.steeringServoVal
         shared.looking = False
         shared.search_thread = None
@@ -72,7 +72,7 @@ def AiCamTarget(class_name2, current_step, errorPan2, errorTilt2):
                 shared.yaxiscam += 1
             elif errorTilt2 < 0 and shared.yaxiscam > 0: 
                 shared.yaxiscam -= 1 
-            #shared.myKit.servo[2].angle = shared.yaxiscam
+            shared.myKit.servo[2].angle = shared.yaxiscam
 
     if class_name2 == 'yellow_bucket' and shared.target_conditions['yellow_bucket'] == shared.current_step:
         shared.looking = False
