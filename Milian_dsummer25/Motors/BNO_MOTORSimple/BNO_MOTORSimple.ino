@@ -18,9 +18,6 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
 unsigned long lastIMURead = 0;
 unsigned long imuInterval = 100;  // read IMU every 100ms
 
-unsigned long motorStartTime = 0;
-unsigned long motorRunDuration = 3000;
-unsigned long motorStopDuration = 2000;
 
 bool motorsRunning = false;
 
@@ -40,9 +37,9 @@ void setup() {
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
   pinMode(EN2, OUTPUT);
-
-  motorStartTime = millis();  // Start motors initially
-  startMotors();
+  
+  delay(100);
+  
 }
 
 void loop() {
@@ -58,28 +55,22 @@ void loop() {
     Serial.print(euler.y());
     Serial.print(" | Pitch: ");
     Serial.println(euler.z());
+    
+    setMotors(map(euler.z(),-180,180,0,255),map(euler.z(),-180,180,0,255));
   }
 
-  // === Motor run timing ===
-  if (motorsRunning && now - motorStartTime >= motorRunDuration) {
-    stopMotors();
-    motorStartTime = now;
-    motorsRunning = false;
-  } else if (!motorsRunning && now - motorStartTime >= motorStopDuration) {
-    startMotors();
-    motorStartTime = now;
-    motorsRunning = true;
-  }
+  
 }
 
 // === Motor control ===
-void startMotors() {
+void setMotors(int spd1 , int spd2) {
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
-  analogWrite(EN, 255);
-  analogWrite(EN2, 255);
+  delay(100);
+  analogWrite(EN, spd1);
+  analogWrite(EN2, spd2);
 }
 
 void stopMotors() {
