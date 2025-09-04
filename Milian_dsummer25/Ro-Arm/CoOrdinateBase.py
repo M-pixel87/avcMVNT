@@ -92,98 +92,12 @@ def ik(x, y, z, angles, error):  # angles = [theta1, theta2, theta3]
         ik(x, y, z, angles, error)
 
 
-def xyzTest():
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(1)
 
-    # Z fixed
-    z = 0
-    y = 8
-
-    # --- Sweep in X ---
-    for x in range(4, 22, 1):  # forward
-        ik(x, 0, z, angles, 0)
-        roarm.joints_angle_ctrl(angles, 300, 150)
-        time.sleep(0.3)
-
-    for x in range(21, 4, -1):  # backward
-        ik(x, 0, z, angles, 0)
-        roarm.joints_angle_ctrl(angles, 300, 150)
-        time.sleep(0.3)
-
-    # --- Sweep in Y ---
-    x = 15  # fixed X
-    z = 11
-    for y in range(-10, 10, 1):  # left to right
-        ik(x, y, z, angles, 0)
-        roarm.joints_angle_ctrl(angles, 300, 150)
-        time.sleep(0.3)
-
-    for y in range(10, -10, -1):  # right to left
-        ik(x, y, z, angles, 0)
-        roarm.joints_angle_ctrl(angles, 300, 150)
-        time.sleep(0.3)
-
-    # --- Sweep in Z ---
-    y = 8  # fixed Y
-    x = 8 
-    for z in range(0, 20, 1):  # up
-        ik(x, y, z, angles, 0)
-        roarm.joints_angle_ctrl(angles, 300, 150)
-        time.sleep(0.3)
-
-    for z in range(20, -1, -1):  # down
-        ik(x, y, z, angles, 0)
-        roarm.joints_angle_ctrl(angles, 300, 150)
-        time.sleep(0.3)
-
-    print("XYZ movement test complete.")
-
-def wrist_test():
-    # Move to a reachable forward position
-    target_x = 10
-    target_y = 0
-    target_z = 8
-
-    print("Moving arm out...")
-    ik(target_x, target_y, target_z, angles, 0)
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(1)
-
-    # Twist the wrist (Joint 3) — rotate left then right
-    print("Twisting wrist...")
-    angles[3] = -45  # rotate left
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(1)
-
-    angles[3] = 45  # rotate right
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(1)
-
-    angles[3] = 0  # return to neutral
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(0.5)
-
-    # Bend the wrist (Joint 4) — pitch down then up
-    print("Bending wrist...")
-    angles[4] = 30  # bend down
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(1)
-
-    angles[4] = -30  # bend up
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(1)
-
-    angles[4] = 0  # return to neutral
-    roarm.joints_angle_ctrl(angles, 300, 150)
-    time.sleep(0.5)
-
-    print("Wrist test complete.")
 
 def main():
-    xyzTest()
-    #ik(12,0,-1, angles, 0)
-    #roarm.joints_angle_ctrl(angles, 300, 100)
+    #xyzTest()
+    ik(12,0,-1, angles, 0)
+    roarm.joints_angle_ctrl(angles, 300, 100)
 
 
     
@@ -191,3 +105,19 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def move_arm_to(x, y, z, speed=200, acc=100):
+    arm1 = 10
+    arm2 = 14
+    max_reach = arm1 + arm2
+
+    # Distance from base to target (ignoring vertical offset of base joint)
+    distance = math.sqrt(x**2 + y**2 + z**2)
+
+    if distance > max_reach:
+        print(f"⚠️ Target ({x:.2f}, {y:.2f}, {z:.2f}) is out of reach! (dist={distance:.2f}, max={max_reach})")
+        return False  # don’t move
+
+    ik(x, y, z, angles, 0)
+    roarm.joints_angle_ctrl(angles, speed, acc)
+    return True  # success
