@@ -41,7 +41,8 @@ def main():
             # Read joystick values
             left_y = joystick.get_axis(1)   # Left stick vertical
             right_y = joystick.get_axis(3)  # Right stick vertical
-
+            but1 = joystick.get_axis(5)
+            but2 = joystick.get_axis(6)
             # In many controllers, pushing stick forward = -1.0
             left_speed = -scale_axis(left_y)
             right_speed = -scale_axis(right_y)
@@ -62,3 +63,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
