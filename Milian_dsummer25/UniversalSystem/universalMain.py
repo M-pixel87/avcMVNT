@@ -1,23 +1,24 @@
 from systems.inputSystem import XboxController
-from systems.sensorSystem import UltrasonicSensor
 from systems.motorSystem import CytronMotor
 
+#port to talk over serial
+import serial
+PORT = "/dev/ttyACM0"
+BAUD = 9600
+ser = serial.Serial(PORT, BAUD, timeout=1)
+
+
 def main():
+
     # Initialize modules
     controller = XboxController()
-    ultrasonic = UltrasonicSensor(trig_pin=17, echo_pin=18)
-    motors = CytronMotor(in1=4, an1=5, in2=7, an2=6)
+    motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
 
     while True:
         # Read inputs
         ctrl_data = controller.get_input()
-        distance = ultrasonic.read()
 
-        # Example: obstacle stop
-        if distance < 20:
-            motors.set_power(0, 0)
-        else:
-            motors.set_power(ctrl_data["y"], ctrl_data["y"])
+        motors.set_power(ctrl_data["L"], ctrl_data["R"])
 
 if __name__ == "__main__":
     main()
