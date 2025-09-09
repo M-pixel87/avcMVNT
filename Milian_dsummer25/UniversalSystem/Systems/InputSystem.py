@@ -1,46 +1,61 @@
-import time
+import os
 import pygame
+import threading
+import time
 
-class InputSystem:
-    def __init__(self, name):
-        self.name = name
+# headless support (Jetson/Ubuntu without display)
+os.environ["SDL_VIDEODRIVER"] = "dummy"
 
-    def get_input(self):
-        raise NotImplementedError("Override in subclass")
-    
-class XboxController(InputSystem):
-    
-    def __init__(self):
-        # Initialize controller, e.g., using pygame or other library
-        super().__init__("Xbox Controller")
-        joystick = None
 
-    def scale_axis(val):
-        """Convert joystick axis (-1.0 to 1.0) to motor speed (-100 to 100)."""
-        return int(val * 100)
+class XboxControllerThread(threading.Thread):
+    def __init__(self, deadzone=0.1, poll_delay=0.05):
+        super().__init__(daemon=True)  # daemon thread will close with main
+        self.deadzone = deadzone
+        self.poll_delay = poll_delay
+        self.running = True
+        self.data = {"L": 0, "R": 0, "buttons": []}
 
-    def initalizeController(self):
         pygame.init()
+        pygame.display.set_mode((1, 1))
         pygame.joystick.init()
+
         if pygame.joystick.get_count() == 0:
-            print("⚠️ No controller detected.")
-            return False
+            raise RuntimeError("⚠️ No controller detected")
+
         self.joystick = pygame.joystick.Joystick(0)
         self.joystick.init()
-        print(f"✅ Connected to controller: {self.joystick.get_name()}")
-        return True
+        print(f"✅ Controller: {self.joystick.get_name()}")
 
-    def get_input(self):
-        pygame.event.pump()
-         # Joystick axes for driving
-        left_y = self.joystick.get_axis(1)
-        right_y = self.joystick.get_axis(3)
-        left_speed = -self.scale_axis(left_y)
-        right_speed = -self.scale_axis(right_y)
+    def scale_axis(self, val):
+        return int(val * 100)
 
-        if abs(left_speed) < 10:
-            left_speed = 0
-        if abs(right_speed) < 10:
-            right_speed = 0
+    def run(self):
+        """Main loop of the thread: constantly update controller state."""
+        while self.running:
+            pygame.event.pump()
 
-        return {"L": -left_speed, "R": -right_speed, "buttons": []}
+            left_y = self.joystick.get_axis(1)
+            right_y = self.joystick.get_axis(3)
+
+            left_speed = -self.scale_axis(left_y)
+            right_speed = -self.scale_axis(right_y)
+
+            if abs(left_speed) < self.deadzone * 100:
+                left_speed = 0
+            if abs(right_speed) < self.deadzone * 100:
+                right_speed = 0
+
+            # collect button states
+            buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
+
+            self.data = {"L": left_speed, "R": right_speed, "buttons": buttons}
+
+            time.sleep(self.poll_delay)
+
+    def get_data(self):
+        """Get the latest snapshot of controller input."""
+        return self.data
+
+    def stop(self):
+        """Gracefully stop the thread."""
+        self.running = False
