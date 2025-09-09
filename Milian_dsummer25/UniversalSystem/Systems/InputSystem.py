@@ -8,13 +8,11 @@ os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 
 class XboxController:
-    def __init__(self, deadzone=0.1):
+    def __init__(self, deadzone=0.05):
         self.deadzone = deadzone
         self.data = {"L": 0, "R": 0, "buttons": []}
 
-        pygame.init()
-        pygame.display.set_mode((1, 1))
-        pygame.joystick.init()
+        
 
         if pygame.joystick.get_count() == 0:
             raise RuntimeError("⚠️ No controller detected")
@@ -31,8 +29,8 @@ class XboxController:
         left_y = self.joystick.get_axis(1)
         right_y = self.joystick.get_axis(3)
 
-        left_speed = -self.scale_axis(left_y)
-        right_speed = -self.scale_axis(right_y)
+        left_speed = self.scale_axis(left_y)
+        right_speed = self.scale_axis(right_y)
 
         if abs(left_speed) < self.deadzone * 100:
             left_speed = 0
