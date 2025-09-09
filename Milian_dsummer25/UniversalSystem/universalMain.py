@@ -1,7 +1,6 @@
-from Systems.InputSystem import XboxControllerThread
+from Systems.InputSystem import XboxController
 from Systems.motorSystem import CytronMotor
 
-#port to talk over serial
 import pygame
 import time
 import serial
@@ -11,25 +10,17 @@ ser = serial.Serial(PORT, BAUD, timeout=1)
 
 
 def main():
-
-    # Initialize modules
-    controller = XboxControllerThread()
-    controller.start()
+    controller = XboxController()
     motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
     try:
         while True:
-            ctrl_data = controller.get_data()
-            print(ctrl_data)   # you can send this to motors, etc.
+            pygame.event.pump()  # Must be called in main thread
+            ctrl_data = controller.poll()
+            print(ctrl_data)
             motors.set_power(ctrl_data["L"], ctrl_data["R"])
             time.sleep(0.01)
-
     except KeyboardInterrupt:
         print("Stopping...")
-        controller.stop()
-        controller.join()
-
-    
-        
 
 if __name__ == "__main__":
     main()
