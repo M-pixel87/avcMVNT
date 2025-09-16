@@ -8,9 +8,8 @@ import random
 # Serial communication example
 roarm = roarm(roarm_type="roarm_m3", port="/dev/ttyUSB0", baudrate=115200)
 
-# Http communication example
-# Note: HTTP communication needs to be connected to the same wifi first, and host is the IP address of the robotic arm.
-#roarm = roarm(roarm_type="roarm_m3", host="192.168.4.1")
+# Global variable to track current arm position
+current_arm_pos = [0.0, 0.0, 0.0]  # [x, y, z]
 
 def clamp(value, min_val, max_val):
     return max(min_val, min(value, max_val))
@@ -91,20 +90,21 @@ def ik(x, y, z, angles, error):  # angles = [theta1, theta2, theta3]
             print("MINUS")
         ik(x, y, z, angles, error)
 
-
-
-
 def main():
     #xyzTest()
     ik(12,0,-1, angles, 0)
     roarm.joints_angle_ctrl(angles, 300, 100)
 
-
-    
-    
-
 if __name__ == "__main__":
     main()
+
+def get_current_arm_pos():
+    global current_arm_pos
+    return tuple(current_arm_pos)
+
+def set_current_arm_pos(x, y, z):
+    global current_arm_pos
+    current_arm_pos = [x, y, z]
 
 def move_arm_to(x, y, z, speed=200, acc=100):
     arm1 = 10
@@ -120,4 +120,34 @@ def move_arm_to(x, y, z, speed=200, acc=100):
 
     ik(x, y, z, angles, 0)
     roarm.joints_angle_ctrl(angles, speed, acc)
+    set_current_arm_pos(x, y, z)
+    return True  # success
+
+def move_arm_to_parts(x, y, z, n, speed=200, acc=100):
+    arm1 = 10
+    arm2 = 14
+    max_reach = arm1 + arm2
+
+    # Distance from base to target (ignoring vertical offset of base joint)
+    distance = math.sqrt(x**2 + y**2 + z**2)
+
+    if distance > max_reach:
+        print(f"⚠️ Target ({x:.2f}, {y:.2f}, {z:.2f}) is out of reach! (dist={distance:.2f}, max={max_reach})")
+        return False  # don’t move
+
+    # Get current position
+    start_x, start_y, start_z = get_current_arm_pos()
+
+    for i in range(1, n+1):
+        xi = start_x + (x - start_x) * i / n
+        yi = start_y + (y - start_y) * i / n
+        zi = start_z + (z - start_z) * i / n
+        print(f"Moving to part {i}/{n}: ({xi:.2f}, {yi:.2f}, {zi:.2f})")
+        ik(xi, yi, zi, angles, 0)
+        roarm.joints_angle_ctrl(angles, speed, acc)
+        set_current_arm_pos(xi, yi, zi)
+        time.sleep(0.1)  # small delay between parts
+
+    # Ensure final position is set
+    set_current_arm_pos(x, y, z)
     return True  # success
