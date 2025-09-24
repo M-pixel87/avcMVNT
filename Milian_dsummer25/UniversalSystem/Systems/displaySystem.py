@@ -19,7 +19,7 @@ class DisplaySystem:
         self.motor_label = tk.Label(self.root, text="Motor Output: 0, 0", font=("Arial", 14), fg="blue")
         self.motor_label.pack(pady=20)
 
-    def update(self, axes, buttons, motor_output):
+    def update_display(self, axes, buttons, motor_output):
         self.axis_label.config(text=f"Axes: {['{:.2f}'.format(a) for a in axes]}")
         self.button_label.config(text=f"Buttons: {buttons}")
         self.motor_label.config(text=f"Motor Output: {motor_output[0]}, {motor_output[1]}")
