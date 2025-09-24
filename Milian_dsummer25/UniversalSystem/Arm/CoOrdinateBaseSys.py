@@ -31,6 +31,7 @@ def ik(x, y, z, angles, error):  # angles = [theta1, theta2, theta3]
 
     arm1 = 10
     arm2 = 14
+    wrist = 7.5
 
     # Step 1: Solve base rotation (joint 0)
     base_angle_rad = math.atan2(y, x)

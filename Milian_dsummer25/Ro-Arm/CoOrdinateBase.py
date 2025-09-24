@@ -90,13 +90,6 @@ def ik(x, y, z, angles, error):  # angles = [theta1, theta2, theta3]
             print("MINUS")
         ik(x, y, z, angles, error)
 
-def main():
-    #xyzTest()
-    ik(12,0,-1, angles, 0)
-    roarm.joints_angle_ctrl(angles, 300, 100)
-
-if __name__ == "__main__":
-    main()
 
 def get_current_arm_pos():
     global current_arm_pos
@@ -151,3 +144,10 @@ def move_arm_to_parts(x, y, z, n, speed=200, acc=100):
     # Ensure final position is set
     set_current_arm_pos(x, y, z)
     return True  # success
+
+def main():
+    #xyzTest()
+    move_arm_to_parts(11,3,9,4)
+
+if __name__ == "__main__":
+    main()
