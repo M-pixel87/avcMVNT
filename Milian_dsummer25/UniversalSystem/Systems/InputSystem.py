@@ -37,6 +37,8 @@ class XboxController:
         self.x = 10
         self.y = 0
         self.z = 10
+        self.jawA = 5.0
+        self.wristA = -90.0
         
 
         if pygame.joystick.get_count() == 0:
@@ -86,6 +88,8 @@ class XboxController:
 
             # ARM CONTROL
             Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
+            Arm.move_joint(5, self.jawA)
+            Arm.move_joint(4, self.wristA)
 
         buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
         if buttons[0] == 1:
@@ -93,6 +97,17 @@ class XboxController:
             self.mode = 1 if self.mode == 0 else 0
             print(f"🔀 Mode: {'ARM' if self.mode == 1 else 'DRIVE'}")
 
+        if buttons[4] == 1:
+            self.jawA += 2
+
+        if buttons[3] == 1:
+            self.jawA -= 2
+
+        if buttons[6] == 1:
+            self.wristA -= 2
+
+        if buttons[7] == 1:
+            self.wristA += 2
 
         self.data = {"L": left_speed, "R": right_speed,  "buttons": buttons}
         return self.data
