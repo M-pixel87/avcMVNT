@@ -1,10 +1,32 @@
 import os
 import pygame
 from Arm import CoOrdinateBaseSys as Arm
+import jetson_utils
 
 
 # headless support (Jetson/Ubuntu without display)
 os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+class webcam:
+    def __init__(self, cam_id=0, width=640, height=480):
+        self.cam_id = cam_id
+        self.width = width
+        self.height = height
+        camera = jetson_utils.videoSource("/dev/video[{}]".format(cam_id), argv=["--input-width={}".format(width), "--input-height={}".format(height)])
+        display = jetson_utils.videoOutput("display://0", argv=["--output-width={}".format(width), "--output-height={}".format(height)])
+
+    def get_frame(self):
+        img = self.camera.Capture()
+        return img
+    
+    def show_frame(self, img):
+        self.display.Render(img)
+        self.display.SetStatus("Object Detection | Network {:.0f} FPS".format(self.network.GetNetworkFPS()))
+
+    def release(self):
+        self.camera.Close()
+        self.display.Close()
+
 
 
 class XboxController:
