@@ -101,14 +101,12 @@ def main():
     roarm.joints_angle_ctrl(angles, 300, 100)
 
 
-    
-    
 
 if __name__ == "__main__":
     main()
 
 #method to move specific joint by angles EX: jaw 
-def move_joint(joint_index, angle, speed=100, acc=50):
+def move_joint(joint_index, angle, speed=450, acc=250):
     if joint_index < 0 or joint_index >= 6:
         print("Invalid joint index. Must be between 0 and 5.")
         return False
@@ -118,7 +116,7 @@ def move_joint(joint_index, angle, speed=100, acc=50):
     return True
 
 #Method to move arm position using ik to xyz
-def move_arm_to(x, y, z, speed=200, acc=100):
+def move_arm_to(x, y, z, speed=300, acc=250):
     arm1 = 10
     arm2 = 14
     max_reach = arm1 + arm2

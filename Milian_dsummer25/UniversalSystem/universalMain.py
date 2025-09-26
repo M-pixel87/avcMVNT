@@ -2,6 +2,7 @@ from Systems.InputSystem import XboxController
 from Systems.InputSystem import Webcam
 from Systems.motorSystem import CytronMotor
 from Systems.displaySystem import GPUDisplaySystem
+from Systems.displaySystem import TkDisplaySystem
 from Arm import CoOrdinateBaseSys as Arm
 
 import pygame
@@ -16,7 +17,11 @@ pygame.joystick.init()
 controller = XboxController()
 cam = Webcam()
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
-display = GPUDisplaySystem()
+
+if(cam.camera == None):
+    display = TkDisplaySystem()
+else:
+    display = GPUDisplaySystem()
 
 def main():
     try:

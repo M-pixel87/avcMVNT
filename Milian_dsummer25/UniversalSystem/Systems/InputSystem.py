@@ -7,33 +7,67 @@ import jetson_utils
 # headless support (Jetson/Ubuntu without display)
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
+import os
+import jetson_utils
+
+# headless support (Jetson/Ubuntu without display)
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+
 class Webcam:
     def __init__(self, cam_id=0, width=640, height=480):
         self.cam_id = cam_id
         self.width = width
         self.height = height
-        self.camera = jetson_utils.videoSource(
-            f"/dev/video{cam_id}", 
-            argv=[f"--input-width={width}", f"--input-height={height}"]
-        )
-        self.display = jetson_utils.videoOutput(
-            "display://0", 
-            argv=[f"--output-width={width}", f"--output-height={height}"]
-        )
+        self.camera = None  # will stay None if no cam
+        self.display = None
+
+        # try to open a display
+        try:
+            self.display = jetson_utils.videoOutput(
+                "display://0",
+                argv=[f"--output-width={width}", f"--output-height={height}"]
+            )
+        except Exception as e:
+            print(f"⚠️ Display init failed: {e}")
+            self.display = None
+
+        # Now try to open camera
+        try:
+            path = f"/dev/video{cam_id}"
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"No device at {path}")
+
+            self.camera = jetson_utils.videoSource(
+                path,
+                argv=[f"--input-width={width}", f"--input-height={height}"]
+            )
+            print(f"✅ Camera initialized on {path}")
+        except Exception as e:
+            print(f"⚠️ Camera init failed: {e}")
+            self.camera = None
 
     def get_frame(self):
-        return self.camera.Capture()  # returns a cudaImage
+        if self.camera is None:
+            return None
+        try:
+            return self.camera.Capture()
+        except Exception as e:
+            print(f"⚠️ Capture failed: {e}")
+            return None
 
-    #UNUSED
     def show_frame(self, img):
-        self.display.Render(img)
-        self.display.SetStatus("Webcam Stream")
-    #--------------------
+        if self.display is not None and img is not None:
+            self.display.Render(img)
+            self.display.SetStatus("Webcam Stream")
+        elif self.display is not None:
+            # just keep window alive even if no image
+            self.display.SetStatus("No Camera Feed")
 
     def release(self):
-        self.camera.Close()
-        self.display.Close()
-
+        if self.camera is not None:
+            self.camera.Close()
+        if self.display is not None:
+            self.display.Close()
 
 
 
@@ -112,10 +146,10 @@ class XboxController:
             self.jawA -= 2
 
         if buttons[6] == 1:
-            self.wristA -= 2
+            self.wristA -= 5
 
         if buttons[7] == 1:
-            self.wristA += 2
+            self.wristA += 5
 
         self.data = {"L": left_speed, "R": right_speed,  "buttons": buttons}
         return self.data
