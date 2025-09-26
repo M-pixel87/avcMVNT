@@ -1,6 +1,7 @@
 from Systems.InputSystem import XboxController
+from Systems.InputSystem import Webcam
 from Systems.motorSystem import CytronMotor
-from Systems.displaySystem import DisplaySystem
+from Systems.displaySystem import GPUDisplaySystem
 from Arm import CoOrdinateBaseSys as Arm
 
 import pygame
@@ -13,18 +14,20 @@ ser = serial.Serial(PORT, BAUD, timeout=1)
 pygame.init()
 pygame.joystick.init()
 controller = XboxController()
+cam = Webcam()
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
-display = DisplaySystem()
+display = GPUDisplaySystem()
 
 def main():
     try:
         while True:
-            pygameHandle()
+            inputDisplay()
             time.sleep(0.1)
+            
     except KeyboardInterrupt:
         print("Stopping...")
 
-def pygameHandle():
+def inputDisplay():
      # MAIN PYGAME EVENT PROCESSING : CONTROLLER INPUTS
     pygame.event.pump()
     ctrl_data = controller.poll()
@@ -36,7 +39,8 @@ def pygameHandle():
     display.update_display(
         axes,  # show all axes
         ctrl_data["buttons"],
-        (ctrl_data["L"], ctrl_data["R"])
+        (ctrl_data["L"], ctrl_data["R"]),
+        cam.get_frame()
     )
 
 if __name__ == "__main__":
