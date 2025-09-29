@@ -1,6 +1,7 @@
 from Systems.InputSystem import XboxController
 from Systems.InputSystem import Webcam
 from Systems.motorSystem import CytronMotor
+from Systems.sensorSystem import sensorSystem
 from Systems.displaySystem import GPUDisplaySystem
 from Systems.displaySystem import TkDisplaySystem
 from Arm import CoOrdinateBaseSys as Arm
@@ -17,6 +18,7 @@ pygame.joystick.init()
 controller = XboxController()
 cam = Webcam()
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
+sensors = sensorSystem(ser)
 
 if(cam.camera == None):
     display = TkDisplaySystem()
@@ -45,7 +47,8 @@ def inputDisplay():
         axes,  # show all axes
         ctrl_data["buttons"],
         (ctrl_data["L"], ctrl_data["R"]),
-        cam.get_frame()
+        cam.get_frame(),
+        sensors.readSensors()  # pass sensor data for display
     )
 
 if __name__ == "__main__":

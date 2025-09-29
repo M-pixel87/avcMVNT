@@ -1,4 +1,4 @@
-#PLACEHOLDERS/UNDERDEVELOPED
+
 
 class MotorSystem:
     def __init__(self, name):

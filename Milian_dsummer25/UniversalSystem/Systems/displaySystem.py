@@ -21,7 +21,7 @@ class GPUDisplaySystem:
         self.font = jetson_utils.cudaFont()
         #self.scaledFont = jetson_utils.cudaFont(size=scaledSize)
 
-    def update_display(self, axes, buttons, motor_output, img=None):
+    def update_display(self, axes, buttons, motor_output, img=None, data=None):
         if img is None or not self.display.IsStreaming():
             return
 
@@ -42,6 +42,16 @@ class GPUDisplaySystem:
         self.smallFont.OverlayText(img, img.width, img.height, motor_text,
                               5, 65,       # (x,y) position
                               (0, 255, 0, 255), (0, 0, 0, 128))  # green text
+        
+        # If additional data is provided, display it, particullarly sensor data
+        if data:
+            y_offset = 95
+            for key, value in data.items():
+                data_text = f"{key}: {value}"
+                self.smallFont.OverlayText(img, img.width, img.height, data_text,
+                                      5, y_offset,
+                                      (255, 255, 255, 255), (0, 0, 0, 128))  # white text
+                y_offset += 30  # Move down for next line
 
         # Render the image on GPU window
         self.display.Render(img)
@@ -49,6 +59,8 @@ class GPUDisplaySystem:
 
     def is_streaming(self):
         return self.display.IsStreaming()
+    
+    
 
 #SLOW, needs to be limited to 15 fps, causes issues with trying to update so fast
 class TkDisplaySystem:
@@ -74,6 +86,9 @@ class TkDisplaySystem:
         # Label for motor output
         self.motor_label = tk.Label(self.root, text="Motor Output: 0, 0", font=("Arial", 14), fg="blue")
         self.motor_label.pack(pady=20)
+
+        self.data_label = tk.Label(self.root, text="Sensor Data: N/A", font=("Arial", 12))
+        self.data_label.pack(pady=10)
 
     def update_display(self, axes, buttons, motor_output, img=None):
         # Convert Jetson image to numpy if provided
