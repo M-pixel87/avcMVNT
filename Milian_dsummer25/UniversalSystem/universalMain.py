@@ -10,8 +10,8 @@ import pygame
 import time
 import serial
 PORT = "/dev/ttyACM0"
-BAUD = 9600
-ser = serial.Serial(PORT, BAUD, timeout=1)
+BAUD = 115200
+ser = serial.Serial(PORT, BAUD, timeout=0.1)
 
 pygame.init()
 pygame.joystick.init()
@@ -50,6 +50,7 @@ def inputDisplay():
         cam.get_frame(),
         sensors.readSensors()  # pass sensor data for display
     )
+    #print(sensors.readSensors())
 
 if __name__ == "__main__":
     main()

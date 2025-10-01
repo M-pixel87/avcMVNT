@@ -14,9 +14,6 @@ class CytronMotor(MotorSystem):
         # Setup PWM pins, serial port, etc.
 
     def set_power(self, left_speed, right_speed):
-        """
-        left_speed, right_speed: range -100 to 100 (percentage of max speed)
-        """
-        command = f"{left_speed},{right_speed}\n"
+        command = f"L:{left_speed},R:{right_speed}\n"
         self.ser.write(command.encode("utf-8"))
         print(f"Sent: {command.strip()}")
