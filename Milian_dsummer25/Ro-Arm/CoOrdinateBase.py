@@ -147,7 +147,7 @@ def move_arm_to_parts(x, y, z, n, speed=200, acc=100):
 
 def main():
     #xyzTest()
-    move_arm_to_parts(11,3,9,4)
+    move_arm_to(11,3,9)
 
 if __name__ == "__main__":
     main()

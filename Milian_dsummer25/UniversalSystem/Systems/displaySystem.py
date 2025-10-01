@@ -52,7 +52,7 @@ class GPUDisplaySystem:
                                       5, y_offset,
                                       (255, 255, 255, 255), (0, 0, 0, 128))  # white text
                 y_offset += 30  # Move down for next line
-
+        
         # Render the image on GPU window
         self.display.Render(img)
         self.display.SetStatus("Robot GPU Display")
