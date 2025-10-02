@@ -20,8 +20,8 @@ os.environ["SDL_VIDEODRIVER"] = "dummy"
 class AI:
     def __init__(self):
         self.net = jetson_inference.detectNet(
-            model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_sone/ssd-mobilenet.onnx",
-            labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_sone/labels.txt",
+            model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_jone/ssd-mobilenet.onnx",
+            labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_jone/labels.txt",
             input_blob="input_0",
             output_cvg="scores",
             output_bbox="boxes",
@@ -29,7 +29,7 @@ class AI:
         
 
     def detect(self, img):
-        detections = net.Detect(img)
+        detections = self.net.Detect(img)
 
         width = img.width
         height = img.height
@@ -113,11 +113,13 @@ class XboxController:
         self.z = 10
         self.jawA = 5.0
         self.wristA = -90.0
+        self.controller = True
         
 
         if pygame.joystick.get_count() == 0:
             raise RuntimeError("⚠️ No controller detected")
-
+            self.controller = False
+            
         self.joystick = pygame.joystick.Joystick(0)
         self.joystick.init()
         print(f"✅ Controller: {self.joystick.get_name()}")

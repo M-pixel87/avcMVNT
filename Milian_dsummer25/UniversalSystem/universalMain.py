@@ -41,14 +41,27 @@ def main():
 def inputDisplay():
      # MAIN PYGAME EVENT PROCESSING : CONTROLLER INPUTS
     pygame.event.pump()
-    ctrl_data = controller.poll()
+
     # Get raw axes for display
-    joystick = controller.joystick
-    axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
-    print(ctrl_data)
-    motors.set_power(ctrl_data["L"], ctrl_data["R"])
+    if(controller.controller is True):
+        ctrl_data = controller.poll()
+        joystick = controller.joystick
+        axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
+        print(ctrl_data)
+    else:
+        axes = None
+        ctrl_data = None
+    
+    if(ctrl_data is not None):
+        motors.set_power(ctrl_data["L"], ctrl_data["R"])
+    
     img = cam.get_frame()
-    infer.detect(img)
+
+    if(img is None):
+        pass
+    else:
+        infer.detect(img)
+
     display.update_display(
         axes,  # show all axes
         ctrl_data["buttons"],

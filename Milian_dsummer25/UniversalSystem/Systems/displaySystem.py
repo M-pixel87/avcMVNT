@@ -90,7 +90,7 @@ class TkDisplaySystem:
         self.data_label = tk.Label(self.root, text="Sensor Data: N/A", font=("Arial", 12))
         self.data_label.pack(pady=10)
 
-    def update_display(self, axes, buttons, motor_output, img=None):
+    def update_display(self, axes, buttons, motor_output, img=None, data=None):
         # Convert Jetson image to numpy if provided
         if img is not None:
             self.img = jetson_utils.cudaToNumpy(img)
