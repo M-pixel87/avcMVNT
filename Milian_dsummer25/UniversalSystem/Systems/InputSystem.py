@@ -3,6 +3,10 @@ import pygame
 from Arm import CoOrdinateBaseSys as Arm
 import jetson_utils
 
+#Libararies for AI Inference Class
+import jetson_inference
+import time
+#import pycuda.driver as cuda  # Required for synchronization
 
 # headless support (Jetson/Ubuntu without display)
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -12,6 +16,34 @@ import jetson_utils
 
 # headless support (Jetson/Ubuntu without display)
 os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+class AI:
+    def __init__(self):
+        self.net = jetson_inference.detectNet(
+            model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_sone/ssd-mobilenet.onnx",
+            labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_sone/labels.txt",
+            input_blob="input_0",
+            output_cvg="scores",
+            output_bbox="boxes",
+            threshold=0.5)
+        
+
+    def detect(self, img):
+        detections = net.Detect(img)
+
+        width = img.width
+        height = img.height
+
+        if detections:
+            for detect in detections:
+                ID = detect.ClassID
+                top = int(detect.Top)
+                left = int(detect.Left)
+                bottom = int(detect.Bottom)
+                right = int(detect.Right)
+                item = self.net.GetClassDesc(ID)
+                w = right - left
+                print(f'Width of object: {w}')
 
 class Webcam:
     def __init__(self, cam_id=0, width=640, height=480):

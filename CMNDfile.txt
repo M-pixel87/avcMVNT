@@ -1,0 +1,32 @@
+A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+
+
+sudo apt update && sudo apt upgrade
+
+git reset --hard origin/working_Dir
+
+
+
+docker/run.sh 
+  
+
+camera-capture /dev/video2 
+  
+
+python3 train_ssd.py --dataset-type=voc --data=data/recMAIN --model-dir=models/test_rone --batch-size=4 --workers=4 --epochs=200 && python3 onnx_export.py --model-dir=models/test_rone --resolution=512
+
+
+detectnet --model=models/test_sone/ssd-mobilenet.onnx --labels=models/test_sone/labels.txt --input-blob=input_0 --output-cvg=scores --output-bbox=boxes --threshold=0.1 /dev/video2
+
+
+
+
+
+COMANDS STRIAGH FORM THE FORM
+
+python3 train_ssd.py --dataset-type=voc --data=data/recMAIN --model-dir=models/test_jone --batch-size=3 --workers=3 --epochs=90
+
+
+python3 onnx_export.py --model-dir=models/test_hone
+
+detectnet --model=models/test_jone/ssd-mobilenet.onnx --labels=models/test_jone/labels.txt --input-blob=input_0 --output-cvg=scores --output-bbox=boxes /dev/video2

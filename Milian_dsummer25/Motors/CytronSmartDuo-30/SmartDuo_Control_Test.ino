@@ -4,88 +4,97 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
+// IMU
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
-#define IN1 4 // Arduino pin 4 -> MDDS30 IN1
-#define AN1 5 // Arduino pin 5 -> MDDS30 AN1
-#define AN2 6 // Arduino pin 6 -> MDDS30 AN2
-#define IN2 7 // Arduino pin 7 -> MDDS30 IN2
+// Motor driver pins
+#define IN1 4
+#define AN1 5
+#define AN2 6
+#define IN2 7
 
-// Using independent PWM mode
 Cytron_SmartDriveDuo smartDriveDuo30(PWM_INDEPENDENT, IN1, IN2, AN1, AN2);
 
-signed int speedLeft = 0, speedRight = 0;
+// Motor speeds
+int speedLeft = 0;
+int speedRight = 0;
+
+// Serial input buffer
+String inputBuffer = "";
+
+// Timing for IMU output
+unsigned long lastIMUSend = 0;
+const unsigned long imuInterval = 50; // 20Hz
 
 void setup() {
   pinMode(13, OUTPUT);
-  Serial.begin(9600);   // Must match Jetson baud
+  Serial.begin(115200);
 
-  Serial.println("Orientation Sensor Test"); Serial.println("");
-  
-  /* Initialise the sensor */
-  if(!bno.begin())
-  {
-    /* There was a problem detecting the BNO055 ... check your connections */
-    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-    while(1);
+  if (!bno.begin()) {
+    Serial.println("Ooops, no BNO055 detected ... Check wiring!");
+    while (1);
   }
   bno.setExtCrystalUse(true);
 
+  // Startup blink
   digitalWrite(13, HIGH);
-  delay(2000);
+  delay(500);
   digitalWrite(13, LOW);
 }
 
 void loop() {
-  if (Serial.available()) {
-    String cmd = Serial.readStringUntil('\n'); // read a full line
-    int commaIndex = cmd.indexOf(',');
-    Serial.println("RECEIVED");
-    if (commaIndex > 0) {
-      speedLeft = cmd.substring(0, commaIndex).toInt();
-      speedRight = cmd.substring(commaIndex + 1).toInt();
-      Serial.println(speedLeft);
-      Serial.println(speedRight);
-      // clamp to -100 … 100
-      speedLeft = constrain(speedLeft, -100, 100);
-      speedRight = constrain(speedRight, -100, 100);
-
-      // drive motors
-      smartDriveDuo30.control(speedLeft, speedRight);
-
-      digitalWrite(13, HIGH);  // indicate command received
-      delay(50);
-      digitalWrite(13, LOW);
-    }
-
-    delay(10);
-  }
-}
-void get_sensor_data() {
-  /* Get a new sensor event */ 
-  sensors_event_t event; 
-  bno.getEvent(&event);
-  
-  /* Display the floating point data */
-  Serial.print("X: ");
-  Serial.print(event.orientation.x, 4);
-  Serial.print(",")
-  Serial.print("\tY: ");
-  Serial.print(event.orientation.y, 4);
-  Serial.print(",")
-  Serial.print("\tZ: ");
-  Serial.print(event.orientation.z, 4);
-  Serial.println("");
-}
-
-// This runs whenever serial data comes in
-void serialEvent() {
+  // --- Handle motor commands (non-blocking parse) ---
   while (Serial.available()) {
-    char inChar = (char)Serial.read();
-    if (inChar == '\n') {
-      stringComplete = true;
+    char c = (char)Serial.read();
+    if (c == '\n') {
+      processCommand(inputBuffer);
+      inputBuffer = "";
     } else {
-      inputString += inChar;
+      inputBuffer += c;
     }
   }
+
+  // --- Send IMU data at fixed rate ---
+  unsigned long now = millis();
+  if (now - lastIMUSend >= imuInterval) {
+    sendSensorData();
+    lastIMUSend = now;
+  }
+}
+
+void processCommand(String cmd) {
+  // Expect format: "L:<val>,R:<val>"
+  int lIndex = cmd.indexOf('L');
+  int rIndex = cmd.indexOf('R');
+  int commaIndex = cmd.indexOf(',');
+
+  if (lIndex != -1 && rIndex != -1 && commaIndex != -1) {
+    int leftVal = cmd.substring(lIndex + 2, commaIndex).toInt();
+    int rightVal = cmd.substring(rIndex + 2).toInt();
+
+    speedLeft = constrain(leftVal, -100, 100);
+    speedRight = constrain(rightVal, -100, 100);
+
+    smartDriveDuo30.control(speedLeft, speedRight);
+
+   
+
+    // Blink
+    digitalWrite(13, HIGH);
+    delay(5);
+    digitalWrite(13, LOW);
+  }
+}
+
+void sendSensorData() {
+  sensors_event_t event;
+  bno.getEvent(&event);
+
+  // Clean CSV
+  Serial.print("IMU,");
+  Serial.print(event.orientation.x, 2);
+  Serial.print(",");
+  Serial.print(event.orientation.y, 2);
+  Serial.print(",");
+  Serial.println(event.orientation.z, 2);
 }
