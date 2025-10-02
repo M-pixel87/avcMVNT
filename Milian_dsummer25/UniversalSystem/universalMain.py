@@ -1,5 +1,6 @@
 from Systems.InputSystem import XboxController
 from Systems.InputSystem import Webcam
+from Systems.InputSystem import AI
 from Systems.motorSystem import CytronMotor
 from Systems.sensorSystem import sensorSystem
 from Systems.displaySystem import GPUDisplaySystem
@@ -15,8 +16,11 @@ ser = serial.Serial(PORT, BAUD, timeout=0.1)
 
 pygame.init()
 pygame.joystick.init()
+
 controller = XboxController()
 cam = Webcam()
+infer = AI()
+
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
 sensors = sensorSystem(ser)
 
@@ -43,11 +47,13 @@ def inputDisplay():
     axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
     print(ctrl_data)
     motors.set_power(ctrl_data["L"], ctrl_data["R"])
+    img = cam.get_frame()
+    infer.detect(img)
     display.update_display(
         axes,  # show all axes
         ctrl_data["buttons"],
         (ctrl_data["L"], ctrl_data["R"]),
-        cam.get_frame(),
+        img,
         sensors.readSensors()  # pass sensor data for display
     )
     #print(sensors.readSensors())
