@@ -5,6 +5,19 @@ from PIL import Image, ImageTk
 import jetson_utils
 
 
+class DisplaySystem():
+    def __init__(self, cam, mode = "GPU"):
+        self.mode = mode
+        
+        if self.mode == "GPU" and cam:
+            self._impl = GPUDisplaySystem()
+        elif(self.mode == "TK" or cam is not True):
+            self._impl = TkDisplaySystem()
+
+    def __getattr__(self, name):
+        """Forward all attribute/method access to chosen implementation"""
+        return getattr(self._impl, name)
+
 #FAST GPU SYSTEM : gpu accelerated,fast refresh and display, limited hud options
 class GPUDisplaySystem:
     def __init__(self, width=800, height=600):
