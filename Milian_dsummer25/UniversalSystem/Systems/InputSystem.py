@@ -29,21 +29,24 @@ class AI:
         
 
     def detect(self, img):
-        detections = self.net.Detect(img)
+        if(img):
+            detections = self.net.Detect(img)
 
-        width = img.width
-        height = img.height
+            width = img.width
+            height = img.height
 
-        if detections:
-            for detect in detections:
-                ID = detect.ClassID
-                top = int(detect.Top)
-                left = int(detect.Left)
-                bottom = int(detect.Bottom)
-                right = int(detect.Right)
-                item = self.net.GetClassDesc(ID)
-                w = right - left
-                print(f'Width of object: {w}')
+            if detections:
+                for detect in detections:
+                    ID = detect.ClassID
+                    top = int(detect.Top)
+                    left = int(detect.Left)
+                    bottom = int(detect.Bottom)
+                    right = int(detect.Right)
+                    item = self.net.GetClassDesc(ID)
+                    w = right - left
+                    print(f'Width of object: {w}')
+        else:
+            pass
 
 class Webcam:
     def __init__(self, cam_id=0, width=640, height=480):
@@ -113,80 +116,91 @@ class XboxController:
         self.z = 10
         self.jawA = 5.0
         self.wristA = -90.0
-        self.controller = True
         
 
         if pygame.joystick.get_count() == 0:
-            raise RuntimeError("⚠️ No controller detected")
             self.controller = False
-            
-        self.joystick = pygame.joystick.Joystick(0)
-        self.joystick.init()
-        print(f"✅ Controller: {self.joystick.get_name()}")
+        else:
+            self.controller = True
+            self.joystick = pygame.joystick.Joystick(0)
+            self.joystick.init()
+            print(f"✅ Controller: {self.joystick.get_name()}")
 
     def scale_axis(self, val):
         return int(val * 100)
 
     def poll(self):
         """Poll controller state. Call this from the main thread after pygame.event.pump()."""
-        if(self.mode == 0):
-            left_y = self.joystick.get_axis(1)
-            right_y = self.joystick.get_axis(3)
+        if(self.controller is not False):
+            #  in drive mode
+            if(self.mode == 0):
+                left_y = self.joystick.get_axis(1)
+                right_y = self.joystick.get_axis(3)
 
-            left_speed = self.scale_axis(left_y)
-            right_speed = self.scale_axis(right_y)
+                left_speed = self.scale_axis(left_y)
+                right_speed = self.scale_axis(right_y)
 
-            if abs(left_speed) < self.deadzone * 100:
+                if abs(left_speed) < self.deadzone * 100:
+                    left_speed = 0
+                if abs(right_speed) < self.deadzone * 100:
+                    right_speed = 0
+            else:
+            #arm mode controls
                 left_speed = 0
-            if abs(right_speed) < self.deadzone * 100:
                 right_speed = 0
+                left_x = self.joystick.get_axis(0)   # left stick horizontal
+                left_y = self.joystick.get_axis(1)   # left stick vertical
+                right_y = self.joystick.get_axis(3)  # right stick vertical
+
+                # Deadzone (ignore small noise)
+                deadzone = 0.2
+                step_size = 0.5  # how much to move per tick
+                # Move X with left stick horizontal
+                if abs(left_x) > deadzone:
+                    self.x += left_x * step_size
+
+                # Move Z with left stick vertical (inverted so up = increase z)
+                if abs(left_y) > deadzone:
+                    self.z -= left_y * step_size
+
+                # Move Y with right stick vertical
+                if abs(right_y) > deadzone:
+                    self.y -= right_y * step_size
+
+                # ARM CONTROL
+                Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
+                Arm.move_joint(5, self.jawA)
+                Arm.move_joint(4, self.wristA)
+
+            buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
+            if buttons[0] == 1:
+                print("A pressed")
+                self.mode = 1 if self.mode == 0 else 0
+                print(f"🔀 Mode: {'ARM' if self.mode == 1 else 'DRIVE'}")
+
+            if buttons[4] == 1:
+                self.jawA += 2
+
+            if buttons[3] == 1:
+                self.jawA -= 2
+
+            if buttons[6] == 1:
+                self.wristA -= 5
+
+            if buttons[7] == 1:
+                self.wristA += 5
+
+            self.data = {"L": left_speed, "R": right_speed,  "buttons": buttons}
+            return self.data
         else:
-            left_speed = 0
-            right_speed = 0
-            left_x = self.joystick.get_axis(0)   # left stick horizontal
-            left_y = self.joystick.get_axis(1)   # left stick vertical
-            right_y = self.joystick.get_axis(3)  # right stick vertical
-
-            # Deadzone (ignore small noise)
-            deadzone = 0.2
-            step_size = 0.5  # how much to move per tick
-            # Move X with left stick horizontal
-            if abs(left_x) > deadzone:
-                self.x += left_x * step_size
-
-            # Move Z with left stick vertical (inverted so up = increase z)
-            if abs(left_y) > deadzone:
-                self.z -= left_y * step_size
-
-            # Move Y with right stick vertical
-            if abs(right_y) > deadzone:
-                self.y -= right_y * step_size
-
-            # ARM CONTROL
-            Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
-            Arm.move_joint(5, self.jawA)
-            Arm.move_joint(4, self.wristA)
-
-        buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
-        if buttons[0] == 1:
-            print("A pressed")
-            self.mode = 1 if self.mode == 0 else 0
-            print(f"🔀 Mode: {'ARM' if self.mode == 1 else 'DRIVE'}")
-
-        if buttons[4] == 1:
-            self.jawA += 2
-
-        if buttons[3] == 1:
-            self.jawA -= 2
-
-        if buttons[6] == 1:
-            self.wristA -= 5
-
-        if buttons[7] == 1:
-            self.wristA += 5
-
-        self.data = {"L": left_speed, "R": right_speed,  "buttons": buttons}
-        return self.data
+            self.data = {"L": 0, "R": 0, "buttons": []}
+            return self.data
 
     def get_data(self):
         return self.data
+
+    def get_axes(self):
+        if(self.controller):
+            return [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())]
+        else:
+            return [0]
