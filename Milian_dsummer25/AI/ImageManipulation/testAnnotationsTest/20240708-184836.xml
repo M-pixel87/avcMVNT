@@ -1,0 +1,27 @@
+<annotation>
+    <filename>20240708-184836.jpg</filename>
+    <folder>recMAIN</folder>
+    <source>
+        <database>recMAIN</database>
+        <annotation>custom</annotation>
+        <image>custom</image>
+    </source>
+    <size>
+        <width>1280</width>
+        <height>720</height>
+        <depth>3</depth>
+    </size>
+    <segmented>0</segmented>
+    <object>
+        <name>blue_bucket</name>
+        <pose>unspecified</pose>
+        <truncated>0</truncated>
+        <difficult>0</difficult>
+        <bndbox>
+            <xmin>698</xmin>
+            <ymin>147</ymin>
+            <xmax>989</xmax>
+            <ymax>535</ymax>
+        </bndbox>
+    </object>
+</annotation>

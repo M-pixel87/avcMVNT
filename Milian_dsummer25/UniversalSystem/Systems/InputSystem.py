@@ -116,7 +116,11 @@ class XboxController:
         self.z = 10
         self.jawA = 5.0
         self.wristA = -90.0
-        
+
+        # Track last commanded positions
+        self.last_xyz = (self.x, self.y, self.z)
+        self.last_jawA = self.jawA
+        self.last_wristA = self.wristA
 
         if pygame.joystick.get_count() == 0:
             self.controller = False
@@ -130,9 +134,7 @@ class XboxController:
         return int(val * 100)
 
     def poll(self):
-        """Poll controller state. Call this from the main thread after pygame.event.pump()."""
         if(self.controller is not False):
-            #  in drive mode
             if(self.mode == 0):
                 left_y = self.joystick.get_axis(1)
                 right_y = self.joystick.get_axis(3)
@@ -145,16 +147,20 @@ class XboxController:
                 if abs(right_speed) < self.deadzone * 100:
                     right_speed = 0
             else:
-            #arm mode controls
                 left_speed = 0
                 right_speed = 0
-                left_x = self.joystick.get_axis(0)   # left stick horizontal
-                left_y = self.joystick.get_axis(1)   # left stick vertical
-                right_y = self.joystick.get_axis(3)  # right stick vertical
+                left_x = self.joystick.get_axis(0)
+                left_y = self.joystick.get_axis(1)
+                right_y = self.joystick.get_axis(3)
 
-                # Deadzone (ignore small noise)
                 deadzone = 0.2
-                step_size = 0.5  # how much to move per tick
+                step_size = 0.5
+
+                # Save old values for comparison
+                old_xyz = (self.x, self.y, self.z)
+                old_jawA = self.jawA
+                old_wristA = self.wristA
+
                 # Move X with left stick horizontal
                 if abs(left_x) > deadzone:
                     self.x += left_x * step_size
@@ -167,10 +173,18 @@ class XboxController:
                 if abs(right_y) > deadzone:
                     self.y -= right_y * step_size
 
-                # ARM CONTROL
-                Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
-                Arm.move_joint(5, self.jawA)
-                Arm.move_joint(4, self.wristA)
+                # ARM CONTROL: Only send if changed
+                if (self.x, self.y, self.z) != self.last_xyz:
+                    Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
+                    self.last_xyz = (self.x, self.y, self.z)
+
+                if self.jawA != self.last_jawA:
+                    Arm.move_joint(5, self.jawA)
+                    self.last_jawA = self.jawA
+
+                if self.wristA != self.last_wristA:
+                    Arm.move_joint(4, self.wristA)
+                    self.last_wristA = self.wristA
 
             buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
             if buttons[0] == 1:
