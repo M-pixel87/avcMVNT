@@ -1,0 +1,27 @@
+<annotation>
+    <filename>20240708-184836_rot20.jpg</filename>
+    <folder>recMAIN</folder>
+    <source>
+        <database>recMAIN</database>
+        <annotation>custom</annotation>
+        <image>custom</image>
+    </source>
+    <size>
+        <width>1280</width>
+        <height>720</height>
+        <depth>3</depth>
+    </size>
+    <segmented>0</segmented>
+    <object>
+        <name>blue_bucket</name>
+        <pose>unspecified</pose>
+        <truncated>0</truncated>
+        <difficult>0</difficult>
+        <bndbox>
+            <xmin>634</xmin>
+            <ymin>179</ymin>
+            <xmax>1040</xmax>
+            <ymax>643</ymax>
+        </bndbox>
+    </object>
+</annotation>
