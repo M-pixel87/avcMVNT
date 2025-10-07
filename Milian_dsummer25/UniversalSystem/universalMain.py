@@ -1,6 +1,8 @@
 from Systems.InputSystem import XboxController
 from Systems.InputSystem import Webcam
+from Systems.InputSystem import cvWebcam
 from Systems.InputSystem import AI
+from Systems.InputSystem import AI_YOLO
 from Systems.motorSystem import CytronMotor
 from Systems.sensorSystem import sensorSystem
 from Systems.displaySystem import DisplaySystem
@@ -10,22 +12,27 @@ from Arm import CoOrdinateBaseSys as Arm
 import pygame
 import time
 import serial
+
+# Setup serial for Arduino communication
 PORT = "/dev/ttyACM0"
 BAUD = 115200
 ser = serial.Serial(PORT, BAUD, timeout=0.1)
 
+# Initialize Pygame and joystick
 pygame.init()
 pygame.joystick.init()
 
+# Create system objects
 controller = XboxController()
-cam = Webcam()
-infer = AI()
+cam = cvWebcam()
+infer = AI_YOLO(conf_threshold=0.3, iou_threshold=0.4)
 
 #create motor object to send commands
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
 sensors = sensorSystem(ser)
 
-display = DisplaySystem(cam.camera)
+# Initialize display system (use cam.camera to check if camera is available)  (Mode options: "GPU", "TK", "YOLO")
+display = DisplaySystem(cam.camera, mode="YOLO")
 
 def main():
     try:

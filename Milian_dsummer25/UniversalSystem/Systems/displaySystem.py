@@ -3,6 +3,8 @@ import numpy as np
 import jetson_utils
 from PIL import Image, ImageTk
 import jetson_utils
+import cv2
+import time
 
 
 class DisplaySystem():
@@ -13,10 +15,72 @@ class DisplaySystem():
             self._impl = GPUDisplaySystem()
         elif(self.mode == "TK" or cam is not True):
             self._impl = TkDisplaySystem()
+        elif(self.mode == "YOLO" and cam):
+            self._impl = DisplaySystem_YOLO()
 
     def __getattr__(self, name):
         """Forward all attribute/method access to chosen implementation"""
         return getattr(self._impl, name)
+    
+
+
+
+    class DisplaySystem_YOLO:
+        def __init__(self, window_name="YOLO Display", max_fps=30):
+            self.window_name = window_name
+            self.last_time = 0
+            self.frame_delay = 1.0 / max_fps
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+
+        def update_display(self, frame, detections=None, axes=None, buttons=None, motor_output=None, data=None):
+            if frame is None:
+                return
+
+            # Draw YOLO detections
+            if detections:
+                for det in detections:
+                    (x1, y1, x2, y2) = det["bbox"]
+                    label = det["label"]
+                    conf = det["confidence"]
+
+                    # Draw bounding box
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    text = f"{label} {conf:.2f}"
+                    cv2.putText(frame, text, (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+            # Overlay control data
+            y = 20
+            if axes is not None:
+                cv2.putText(frame, f"Axes: {['%.2f' % a for a in axes]}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                y += 20
+            if buttons is not None:
+                cv2.putText(frame, f"Buttons: {buttons}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                y += 20
+            if motor_output is not None:
+                cv2.putText(frame, f"Motors: {motor_output[0]}, {motor_output[1]}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                y += 20
+            if data is not None:
+                for key, value in data.items():
+                    cv2.putText(frame, f"{key}: {value}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    y += 20
+
+            # Frame limiting (avoid overloading CPU)
+            now = time.time()
+            if now - self.last_time >= self.frame_delay:
+                cv2.imshow(self.window_name, frame)
+                self.last_time = now
+
+            # Check for quit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                return "quit"
+
+        def close(self):
+            cv2.destroyAllWindows()
+
+
+
+
 
 #FAST GPU SYSTEM : gpu accelerated,fast refresh and display, limited hud options
 class GPUDisplaySystem:

@@ -1,11 +1,15 @@
 import os
 import pygame
 from Arm import CoOrdinateBaseSys as Arm
+
+#Webcam Libraries
+import cv2
 import jetson_utils
 
 #Libararies for AI Inference Class
 import jetson_inference
 import time
+from ultralytics import YOLO
 #import pycuda.driver as cuda  # Required for synchronization
 
 # headless support (Jetson/Ubuntu without display)
@@ -47,6 +51,132 @@ class AI:
                     print(f'Width of object: {w}')
         else:
             pass
+
+
+
+
+# ==============================================================
+# Optimized YOLO (TensorRT) Inference Class
+# ==============================================================
+class AI_YOLO:
+    def __init__(self, model_path='runs/detect/train/weights/best.engine', conf_threshold=0.5):
+        self.model_path = model_path
+        self.conf_threshold = conf_threshold
+        self.model = None
+        self.class_names = {}
+
+        try:
+            print(f"🔍 Loading YOLO TensorRT model from: {model_path}")
+            self.model = YOLO(model_path)
+            self.class_names = self.model.names
+            print(f"✅ Model loaded successfully ({len(self.class_names)} classes).")
+        except Exception as e:
+            print(f"❌ Error loading YOLO model: {e}")
+            print("ensure the .engine file exists")
+            self.model = None
+
+    def detect(self, frame, display=False):
+        """
+        Run YOLO inference on a frame.
+        Returns a list of detections (dicts) and optionally displays annotated frame.
+        """
+        if self.model is None or frame is None:
+            return []
+
+        # Run inference (TensorRT engine runs directly on GPU)
+        results = self.model(frame, verbose=False)
+
+        detections = []
+        frame_width = frame.shape[1]
+
+        for result in results:
+            for box in result.boxes:
+                conf = float(box.conf[0])
+                if conf < self.conf_threshold:
+                    continue
+
+                x1, y1, x2, y2 = map(float, box.xyxy[0])
+                cls_id = int(box.cls[0])
+                label = self.class_names.get(cls_id, f"class_{cls_id}")
+
+                # Calculate center and width
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
+                box_width = x2 - x1
+
+                # Append detection info
+                detections.append({
+                    "label": label,
+                    "confidence": conf,
+                    "bbox": (int(x1), int(y1), int(x2), int(y2)),
+                    "center": (int(center_x), int(center_y)),
+                    "width": int(box_width)
+                })
+
+        # By default, does not display, but can show annotated frame if desired, this bypasses display system
+        if display:
+            annotated_frame = results[0].plot()
+            cv2.imshow("YOLO TensorRT Inference", annotated_frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                return "quit"
+
+        return detections
+
+    def release(self):
+        """Graceful shutdown of any resources."""
+        cv2.destroyAllWindows()
+        print("🧹 YOLO resources released.")
+
+
+
+
+
+
+class cvWebcam:
+    def __init__(self, cam_id=0, width=640, height=480):
+        self.cam_id = cam_id
+        self.width = width
+        self.height = height
+        self.camera = None
+        self.initialized = False
+
+        try:
+            path = f"/dev/video{cam_id}"
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"No device found at {path}")
+
+            self.camera = cv2.VideoCapture(cam_id)
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+            if not self.camera.isOpened():
+                raise RuntimeError(f"Failed to open camera {cam_id}")
+
+            print(f"✅ cvWebcam initialized on {path} [{width}x{height}]")
+            self.initialized = True
+
+        except Exception as e:
+            print(f"⚠️ cvWebcam init failed: {e}")
+            self.camera = None
+
+    def get_frame(self):
+        if not self.initialized or self.camera is None:
+            return None
+
+        ret, frame = self.camera.read()
+        if not ret:
+            print("⚠️ Frame capture failed.")
+            return None
+        return frame
+
+    def release(self):
+        if self.camera:
+            self.camera.release()
+            self.initialized = False
+            print("🧹 cvWebcam released.")
+
+
+
 
 class Webcam:
     def __init__(self, cam_id=0, width=640, height=480):
@@ -103,6 +233,8 @@ class Webcam:
             self.camera.Close()
         if self.display is not None:
             self.display.Close()
+
+
 
 
 
