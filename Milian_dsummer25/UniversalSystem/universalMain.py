@@ -25,7 +25,7 @@ pygame.joystick.init()
 # Create system objects
 controller = XboxController()
 cam = cvWebcam()
-infer = AI_YOLO(conf_threshold=0.3, iou_threshold=0.4)
+infer = AI_YOLO(conf_threshold=0.3)
 
 #create motor object to send commands
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
@@ -38,7 +38,7 @@ def main():
     try:
         while True:
             inputDisplay()
-            time.sleep(0.050)
+            #time.sleep(0.001)
             
     except KeyboardInterrupt:
         print("Stopping...")
@@ -53,13 +53,14 @@ def inputDisplay():
     motors.set_power(ctrl_data["L"], ctrl_data["R"])
     
     img = cam.get_frame()
-    infer.detect(img)
+    detections = infer.detect(img)
 
     display.update_display(
+        img,
+        detections,
         controller.get_axes(),  # show all axes
         ctrl_data["buttons"],
         (ctrl_data["L"], ctrl_data["R"]),
-        img,
         sensors.readSensors()  # pass sensor data for display
     )
 
