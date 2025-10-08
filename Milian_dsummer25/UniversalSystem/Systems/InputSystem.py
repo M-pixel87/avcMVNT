@@ -1,25 +1,21 @@
 import os
+
+# Headless mode (no display)
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+# Fix for TLS conflict: preload OpenMP first
+os.environ["LD_PRELOAD"] = "/usr/lib/aarch64-linux-gnu/libgomp.so.1"
+
+# === FIXED IMPORT ORDER ===
+import torch
+from ultralytics import YOLO  # Uses torch internally
+import jetson_inference       # Uses TensorRT, not PyTorch
+import jetson_utils
+import cv2
 import pygame
 from Arm import CoOrdinateBaseSys as Arm
 
-#Webcam Libraries
-import cv2
-import jetson_utils
 
-#Libararies for AI Inference Class
-import jetson_inference
-import time
-from ultralytics import YOLO
-#import pycuda.driver as cuda  # Required for synchronization
-
-# headless support (Jetson/Ubuntu without display)
-os.environ["SDL_VIDEODRIVER"] = "dummy"
-
-import os
-import jetson_utils
-
-# headless support (Jetson/Ubuntu without display)
-os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 class AI:
     def __init__(self):
@@ -56,10 +52,10 @@ class AI:
 
 
 # ==============================================================
-# Optimized YOLO (TensorRT) Inference Class
+# Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='runs/detect/train/weights/best.engine', conf_threshold=0.5):
+    def __init__(self, model_path='/home/uafs/Downloads/best.engine', conf_threshold=0.5):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
