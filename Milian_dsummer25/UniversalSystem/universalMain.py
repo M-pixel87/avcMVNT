@@ -34,11 +34,22 @@ sensors = sensorSystem(ser)
 # Initialize display system (use cam.camera to check if camera is available)  (Mode options: "GPU", "TK", "YOLO")
 display = DisplaySystem(cam.camera, mode="YOLO")
 
+
+#Handle how fast the program runs
+max_fps = 60
+
+last_time = 0
+frame_delay = 1.0 / max_fps
+
+
 def main():
+    global last_time
     try:
         while True:
-            inputDisplay()
-            #time.sleep(0.001)
+            now = time.time()
+            if now - last_time >= frame_delay:
+                inputDisplay()
+                last_time = now
             
     except KeyboardInterrupt:
         print("Stopping...")
