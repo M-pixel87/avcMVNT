@@ -16,7 +16,7 @@ class DisplaySystem:
         elif self.mode == "TK" or cam is None:
             self._impl = TkDisplaySystem()
         elif self.mode == "YOLO" :
-            self._impl = DisplaySystem_YOLO(max_fps = 60)
+            self._impl = DisplaySystem_YOLO()
         else:
             raise ValueError(f"Unknown or unsupported display mode: {mode}")
 
@@ -38,10 +38,9 @@ class DisplaySystem:
 
 
 class DisplaySystem_YOLO:
-    def __init__(self, window_name="YOLO Display", max_fps=30):
+    def __init__(self, window_name="YOLO Display"):
         self.window_name = window_name
-        self.last_time = 0
-        self.frame_delay = 1.0 / max_fps
+
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
     def update_display(self, frame, detections=None, axes=None, buttons=None, motor_output=None, data=None):
@@ -77,11 +76,8 @@ class DisplaySystem_YOLO:
                 cv2.putText(frame, f"{key}: {value}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 y += 20
 
-        # Frame limiting (avoid overloading CPU)
-        now = time.time()
-        if now - self.last_time >= self.frame_delay:
-            cv2.imshow(self.window_name, frame)
-            self.last_time = now
+      
+        cv2.imshow(self.window_name, frame)
 
         # Check for quit
         if cv2.waitKey(1) & 0xFF == ord('q'):
