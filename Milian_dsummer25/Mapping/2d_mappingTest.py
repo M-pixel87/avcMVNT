@@ -1,5 +1,7 @@
 import locationObjects
 import numpy as np
+import math
+import time
 
 total_width = 30.0  
 total_height = 30.0
@@ -42,6 +44,9 @@ def place_objects_on_map(matrix, objects):
     matrix[rows-1][cols-1].add_object(objects[3])        # yellow
 #------------------------------------------------------------------------------
 
+def random_movement():
+    """Generates a small random movement value."""
+    return (np.random.rand() - 0.5) * 3.0  # Random float in range [-1.5, 1.5]
 
 
 def main():
@@ -49,7 +54,7 @@ def main():
     place_objects_on_map(ar, objects)
     
     # Place the vehicle at the center of the 30x30 area
-    vehicle.set_initial_position(6.0, 6.0)
+    vehicle.set_initial_position(15.0, 15.0)
 
 
     print("--- Initial Map ---")
@@ -60,14 +65,14 @@ def main():
 
     # --- Simulate movement from sensor data (dx, dy) ---
     print("Simulating movement...")
-    vehicle.update_position(dx=1.0, dy=0.0)
-    vehicle.update_position(dx=2.5, dy=0.0) 
-    vehicle.update_position(dx=5.0, dy=-4.0)
+    while(True):
+        time.sleep(1)       
+        vehicle.update_position(dx = random_movement(), dy = random_movement())
+        print(ar)
+        print(f"Vehicle now at: (x={vehicle.x:.2f}, y={vehicle.y:.2f})")
+
     
 
-    print("\n--- Map After Movement ---")
-    print(ar)
-    print(f"\nVehicle's final position: (x={vehicle.x:.2f}, y={vehicle.y:.2f}) in Grid Cell ({vehicle.i}, {vehicle.j})")
 
 if __name__ == "__main__":
     main()
