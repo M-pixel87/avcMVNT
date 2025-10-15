@@ -75,6 +75,20 @@ def inputDisplay():
         sensors.readSensors()  # pass sensor data for display
     )
 
+def testPickup():
+    arm = Arm.CoOrdinateBaseSys(ser)
+    time.sleep(1)
+    arm.moveTo(10,10,0)
+    time.sleep(2)
+    arm.moveTo(10,2,0)
+    arm.move_joint(4, 90)
+    arm.move_joint(5, 60)
+    time.sleep(2)
+    arm.move_joint(5, 10)
+    time.sleep(2)
+    arm.moveTo(10,10,0)
+    time.sleep(2)
+
 
 if __name__ == "__main__":
     main()
