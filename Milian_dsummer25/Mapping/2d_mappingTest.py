@@ -67,7 +67,7 @@ def main():
     print("Simulating movement...")
     while(True):
         time.sleep(1)       
-        vehicle.update_position(dx = random_movement(), dy = random_movement())
+        vehicle.update_position(dx = random_movement(), dy = random_movement(), rot = 180)
         print(ar)
         print(f"Vehicle now at: (x={vehicle.x:.2f}, y={vehicle.y:.2f})")
 

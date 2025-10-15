@@ -43,9 +43,10 @@ class vehicle:
         self.cell_height = total_height / num_rows
         self.cell_width = total_width / num_cols
 
-        # The vehicle's primary state is now continuous x, y
+        # The vehicle's primary state is continuous x, y
         self.x = 0.0
         self.y = 0.0
+        self.rotation = 0.0  # In degrees, 0 = facing "right"
         
         # Grid state (which square it's in)
         self.square = None
@@ -61,13 +62,15 @@ class vehicle:
 
 
 
-    def update_position(self, dx, dy):
+    def update_position(self, dx, dy, rot):
         """
         Updates the vehicle's continuous position based on sensor data (dx, dy)
         and re-evaluates which grid square it's in.
         """
-        new_x = self.x + dx
-        new_y = self.y + dy
+        self.rotation = rot
+        new_x = self.x + dx*math.cos(math.radians(self.rotation)) 
+        new_y = self.y + dy*math.sin(math.radians(self.rotation))
+       
 
         # Boundary check to keep the vehicle on the map
         if not (0 <= new_x < self.total_width and 0 <= new_y < self.total_height):
