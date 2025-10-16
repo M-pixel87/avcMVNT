@@ -16,4 +16,4 @@ class CytronMotor(MotorSystem):
     def set_power(self, left_speed, right_speed):
         command = f"L:{left_speed},R:{right_speed}\n"
         self.ser.write(command.encode("utf-8"))
-        print(f"Sent: {command.strip()}")
+        #print(f"Sent: {command.strip()}")
