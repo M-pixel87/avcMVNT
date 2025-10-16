@@ -23,7 +23,7 @@ class DisplaySystem:
     def update_display(self, img=None, detections=None, axes=None, buttons=None, motor_output=None, data=None):
         """Universal update_display interface for all display types."""
         if self.mode == "YOLO":
-            self._impl.update_display(img, detections, axes, buttons, motor_output)
+            self._impl.update_display(img, detections, axes, buttons, motor_output, data)
         elif self.mode == "GPU":
             self._impl.update_display(axes, buttons, motor_output, img, data)
         elif self.mode == "TK":

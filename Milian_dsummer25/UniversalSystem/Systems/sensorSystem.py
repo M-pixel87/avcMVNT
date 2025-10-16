@@ -4,7 +4,7 @@ class sensorSystem:
         self.data = {}
 
     def readSensors(self):
-        while self.ser.in_waiting > 0:  # flush backlog
+        while self.ser.in_waiting > 0:
             try:
                 line = self.ser.readline().decode(errors='ignore').strip()
             except Exception as e:
@@ -14,19 +14,26 @@ class sensorSystem:
             if not line:
                 continue
 
-            # Only handle IMU lines
+            # Handle IMU data line: "IMU,roll,pitch,yaw,ax,ay,az"
             if line.startswith("IMU,"):
                 parts = line.split(',')
-                if len(parts) == 4:
+                if len(parts) == 7:
                     try:
-                        values = list(map(float, parts[1:]))
-                        self.data = {f'sensor{i+1}': val for i, val in enumerate(values)}
+                        _, roll, pitch, yaw, ax, ay, az = parts
+                        self.data = {
+                            "Roll": round(float(roll), 2),
+                            "Pitch": round(float(pitch), 2),
+                            "Yaw": round(float(yaw), 2),
+                            "ax": round(float(ax), 3),
+                            "ay": round(float(ay), 3),
+                            "az": round(float(az), 3)
+                        }
                     except ValueError:
                         print(f"Bad IMU data: {line}")
 
-            # Ignore lines starting with a specific tag
             elif line.startswith("ACK:"):
-                pass
+                # Optional: ignore acknowledgments
+                continue
 
             else:
                 print(f"Skipping unknown line: {line}")
