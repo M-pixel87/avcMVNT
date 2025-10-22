@@ -63,18 +63,34 @@ class vehicle:
 
 
 
-    def update_position(self, dax, day, rot, dt =0.2):
+    def update_position(self, dax, day, rot, dt =0.0166):
         """
         Updates the vehicle's continuous position based on sensor data (dx, dy)
         and re-evaluates which grid square it's in.
         """
+
+        if(abs(dax) <= 0.05):
+            dax = 0
+        
+        if(abs(day) <= 0.05):
+            day = 0
+
         self.velocityx += dax*dt
         self.velocityy += day*dt
+        self.velocityx *= 0.99
+        self.velocityy *= 0.99
+
+        if(abs(self.velocityx) <= 0.005):
+            self.velocityx = 0
+        
+        if(abs(self.velocityy) <= 0.005):
+            self.velocityy = 0
 
         self.rotation = rot
         new_x = self.x + self.velocityx*dt
         new_y = self.y + self.velocityy*dt
-       
+        print(self.velocityx)
+        print(self.velocityy)
 
         # Boundary check to keep the vehicle on the map
         if not (0 <= new_x < self.total_width and 0 <= new_y < self.total_height):
