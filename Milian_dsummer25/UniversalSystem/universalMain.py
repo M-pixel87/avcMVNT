@@ -35,8 +35,6 @@ sensors = sensorSystem(ser)
 
 #create and initialize map
 map = mapSys.Map(w=30, h=30, r=20, c=20)
-map.fill_matrix()
-map.place_objects_on_map()
 
 # Initialize display system (use cam.camera to check if camera is available)  (Mode options: "GPU", "TK", "YOLO")
 display = DisplaySystem(cam.camera, mode="YOLO")
@@ -73,8 +71,8 @@ def inputDisplay():
     img = cam.get_frame()
     detections = infer.detect(img)
 
-    data = sensors.read_sensors()
-    map.vehicle.update_position(data["roll"], data["ax"], data["ay"])
+    data = sensors.readSensors()
+    map.vehicle.update_position( data["ax"], data["ay"],data["Roll"])
 
     display.update_display(
         img,
