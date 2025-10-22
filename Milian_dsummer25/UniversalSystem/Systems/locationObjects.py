@@ -47,7 +47,8 @@ class vehicle:
         self.x = 0.0
         self.y = 0.0
         self.rotation = 0.0  # In degrees, 0 = facing "right"
-        self.velocity = 0.0  # Current speed in ft/s
+        self.velocityx = 0.0  # Current speed in ft/s
+        self.velocityy = 0.0  # Current speed in ft/s
         # Grid state (which square it's in)
         self.square = None
         self.i = None
@@ -62,15 +63,17 @@ class vehicle:
 
 
 
-    def update_position(self, dax, day, rot):
+    def update_position(self, dax, day, rot, dt =0.2):
         """
         Updates the vehicle's continuous position based on sensor data (dx, dy)
         and re-evaluates which grid square it's in.
         """
-        self.velocity += math.sqrt(dax**2 + day**2)
+        self.velocityx += dax*dt
+        self.velocityy += day*dt
+
         self.rotation = rot
-        new_x = self.x + self.velocity*math.cos(math.radians(self.rotation)) 
-        new_y = self.y + self.velocity*math.sin(math.radians(self.rotation))
+        new_x = self.x + self.velocityx*dt
+        new_y = self.y + self.velocityy*dt
        
 
         # Boundary check to keep the vehicle on the map
