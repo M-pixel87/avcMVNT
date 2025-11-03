@@ -1,168 +1,117 @@
-// 1. INCLUDE ALL LIBRARIES
-// ===================================
-#include "Arduino_LED_Matrix.h" // For the 12x8 LED grid
-#include <Wire.h>               // For I2C communication
-#include "LIDARLite_v4LED.h"    // For the LIDAR sensor
+/*
+  HC-SR04 Ultrasonic Sensor + Arduino Uno R4 WiFi LED Matrix Display
 
-// 2. DEFINE ALL GLOBAL VARIABLES
-// ===================================
+  This sketch measures distance using an HC-SR04 ultrasonic sensor
+  and displays the result in millimeters (mm) on the built-in
+  12x8 LED matrix.
 
-// --- Project Comments ---
-// This code is designed to output a '0' if an object in front of the sensor is too close. It’s up to the Orin to handle that trigger and decide how to respond.
-// If the detected object is a blue bucket, the Orin will take care of moving the servo accordingly.
-// This part of the code simply detects when an object is close, as you requested.
-// To use the car place hand in front of lidar first to set a 0
+  It displays the numeric value and will show "MAX" if the distance
+  is greater than 220mm, as requested.
 
-// --- LIDAR Variables ---
-LIDARLite_v4LED myLidarLite;
-float distance;
-byte lidarLiteAddress = 0x62;
-const int distanceAlertPin = 2; // This pin will act as the triger for the lidar
-const int safteyPin = 3; // We set this pin as a VAR to act as the turn on signal initally for the orin
+  Wiring the HC-SR04 Sensor:
+  - VCC pin -> 5V on Arduino
+  - GND pin -> GND on Arduino
+  - Trig pin -> Digital Pin 7 on Arduino
+  - Echo pin -> Digital Pin 8 on Arduino
+  
+  [Image of HC-SR04 ultrasonic sensor wiring to an Arduino]
+*/
 
-// --- LED Matrix Variables ---
-ArduinoLEDMatrix matrix; 
+// Include the libraries for the LED Matrix
+#include "ArduinoGraphics.h"
+#include "Arduino_LED_Matrix.h"
 
-// Define all frames (digits 0-9 and a blank screen)
-const uint32_t BLANK[3] = { 0x0, 0x0, 0x0 };
-const uint32_t DIGIT_0[3] = { 0x1c0701c, 0x0, 0x0 };
-const uint32_t DIGIT_1[3] = { 0x4040404, 0x0, 0x0 };
-const uint32_t DIGIT_2[3] = { 0x1c0201c, 0x1, 0x0 };
-const uint32_t DIGIT_3[3] = { 0x1c0201c, 0x2, 0x0 };
-const uint32_t DIGIT_4[3] = { 0x7040704, 0x0, 0x0 };
-const uint32_t DIGIT_5[3] = { 0x1c0101c, 0x2, 0x0 };
-const uint32_t DIGIT_6[3] = { 0x1c0101c, 0x1, 0x0 };
-const uint32_t DIGIT_7[3] = { 0x4040404, 0x1c, 0x0 };
-const uint32_t DIGIT_8[3] = { 0x1c0701c, 0x1c, 0x0 };
-const uint32_t DIGIT_9[3] = { 0x7040704, 0x1c, 0x0 };
+// Create an instance of the LED matrix
+Arduino_LED_Matrix matrix;
 
-// Store all the digit frames in a single "lookup" array 
-// Something that might not be clear is that these addresses for LEDS
-// Can be shown in a Matrix so these with out a regi shift will only show the
-// First 3 leds changing
-const uint32_t FONT[10][3] = {
-  { 0x1c0701c, 0x0, 0x0 }, // 0
-  { 0x4040404, 0x0, 0x0 }, // 1
-  { 0x1c0201c, 0x1, 0x0 }, // 2
-  { 0x1c0201c, 0x2, 0x0 }, // 3
-  { 0x7040704, 0x0, 0x0 }, // 4
-  { 0x1c0101c, 0x2, 0x0 }, // 5
-  { 0x1c0101c, 0x1, 0x0 }, // 6
-  { 0x4040404, 0x1c, 0x0 }, // 7
-  { 0x1c0701c, 0x1c, 0x0 }, // 8
-  { 0x7040704, 0x1c, 0x0 }  // 9
-};
+// Define the pins for the ultrasonic sensor
+const int trigPin = 7; // Trigger pin
+const int echoPin = 8; // Echo pin
 
+// Define the maximum distance to display a number for
+const int maxDistanceMm = 220;
 
-
-// 3. SINGLE SETUP FUNCTION
-// ===================================
 void setup() {
-  // --- Serial and Pin Setup ---
-  Serial.begin(115200);
-  pinMode(distanceAlertPin, OUTPUT);
-  pinMode(safteyPin, OUTPUT);
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(safteyPin, HIGH); // this tells my orin to start
+  // Initialize Serial Monitor for debugging (optional)
+  // You can open the Serial Monitor (Tools > Serial Monitor)
+  // to see the raw distance values.
+  Serial.begin(9600);
 
-  // --- I2C and LIDAR Setup ---
-  Wire.begin();
+  // Set the pin modes for the sensor
+  pinMode(trigPin, OUTPUT); // Trig pin sends a pulse
+  pinMode(echoPin, INPUT);  // Echo pin reads the return pulse
 
-  // Set I2C to 400kHz
-#if ARDUINO >= 157
-  Wire.setClock(400000UL);
-#else
-  TWBR = ((F_CPU / 400000UL) - 16) / 2;
-#endif
-
-  // Configure the LIDARLite device
-  myLidarLite.configure(0);
-
-  // --- I2C Scan (for debugging, can be removed later) ---
-  Serial.println("Scanning I2C bus...");
-  for (byte address = 1; address < 127; address++) {
-    Wire.beginTransmission(address);
-    if (Wire.endTransmission() == 0) {
-      Serial.print("Found device at address 0x");
-      Serial.println(address, HEX);
-    }
-  }
-  Serial.println("I2C Scan Complete.");
-
-  // --- LED Matrix Setup ---
+  // Initialize the LED matrix
   matrix.begin();
-  Serial.println("Setup Complete. Starting loop...");
 }
 
-// 4. MAIN LOOP
-// ===================================
 void loop() {
-  if (myLidarLite.getBusyFlag() == 0) {
-    // 1. Take LIDAR measurement
-    myLidarLite.takeRange();
-    distance = myLidarLite.readDistance();
+  // Get the current distance in millimeters from our function
+  long distance = getDistanceInMm();
 
-    // 2. Check distance and set alert pins
-    if (distance <= 170) {
-      digitalWrite(distanceAlertPin, HIGH); // Triggered
-      digitalWrite(LED_BUILTIN, HIGH);    // Turn on built-in LED
-    } else {
-      digitalWrite(distanceAlertPin, LOW); // No trigger
-      digitalWrite(LED_BUILTIN, LOW);     // Turn off built-in LED
-    }
+  // Print the distance to the Serial Monitor for debugging
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" mm");
 
-    // 3. Display the distance on the LED Matrix
-    // We cast the 'float' distance to an 'int' for the display function
-    displayDigits((int)distance);
-
-    // 4. Print distance to Serial Monitor
-    Serial.print("Sensor distance: ");
-    Serial.print(distance);
-    Serial.println(" cm");
+  // Create the text string to display
+  String displayText;
+  if (distance > maxDistanceMm) {
+    displayText = "MAX"; // Display "MAX" if over 220mm
+  } else {
+    displayText = String(distance); // Convert the number to a String
   }
 
-  delay(100);
+  // Clear the matrix display before writing new text
+  matrix.clear();
+
+  /*
+    Display the text.
+    We use matrix.textScroll() because numbers with 3 digits
+    (like "220") won't fit on the 12x8 matrix statically.
+    textScroll() will scroll the text across the display.
+
+    The second parameter (80) is the scroll speed in milliseconds.
+    A lower number is faster.
+  */
+  matrix.textScroll(displayText, 80);
+  
+  // Wait for 200 milliseconds before taking the next reading
+  // This prevents the display from flickering too fast.
+  delay(200);
 }
 
-
-// 5. HELPER FUNCTION (Unchanged)
-// ===================================
 /**
- * @brief Displays a 3-digit number on the 12x8 LED grid.
- * @param number The number to display. If > 999 or < 0, shows a blank screen.
- */
-void displayDigits(int number) {
+   @brief Measures distance using the HC-SR04 sensor.
+   @return The distance in millimeters (mm).
+*/
+long getDistanceInMm() {
+  // --- Send the Trigger Pulse ---
+  // Ensure the trigger pin is low for a clean pulse
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
 
-  // --- This is your "out of bounds" check ---
-  if (number < 0 || number > 999) {
-    matrix.loadFrame(BLANK); // Load the all-off frame
-    return;                  // Exit the function
-  }
+  // Send a 10-microsecond HIGH pulse to trigger the sensor
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
 
-  // Break the number into its three digits
-  // Example: number = 365
-  int d1 = (number / 100) % 10; // Hundreds digit: 3
-  int d2 = (number / 10) % 10;  // Tens digit: 6
-  int d3 = (number / 1) % 10;   // Ones digit: 5
+  // --- Read the Echo Pulse ---
+  // Read the duration of the HIGH pulse on the echo pin
+  // pulseIn() waits for the pin to go HIGH, times the pulse, 
+  // and waits for it to go LOW.
+  // The duration is in microseconds.
+  long duration = pulseIn(echoPin, HIGH);
 
-  // Create a new, blank frame to draw our 3 digits onto
-  uint32_t frame[3] = { 0, 0, 0 };
+  // --- Calculate the Distance ---
+  // Speed of sound is approx 343 meters/second.
+  // This is 0.343 millimeters/microsecond.
+  // The pulse travels there and back, so we divide the total time by 2.
+  // Distance = (Duration * 0.343) / 2
+  //
+  // To avoid using floating-point math, we can rewrite:
+  // Distance = (Duration * 343) / 2000
+  long distance = (duration * 343) / 2000;
 
-  // Combine the digit for the first position (hundreds)
-  frame[0] = FONT[d1][0];
-  frame[1] = FONT[d1][1];
-  frame[2] = FONT[d1][2];
-
-  // Combine the digit for the second position (tens), shifted 4 pixels to the left
-  frame[0] |= (FONT[d2][0] << 4);
-  frame[1] |= (FONT[d2][1] << 4);
-  frame[2] |= (FONT[d2][2] << 4);
-
-  // Combine the digit for the third position (ones), shifted 8 pixels to the left
-  frame[0] |= (FONT[d3][0] << 8);
-  frame[1] |= (FONT[d3][1] << 8);
-  frame[2] |= (FONT[d3][2] << 8);
-
-  // Finally, display the combined frame
-  matrix.loadFrame(frame);
+  return distance;
 }
