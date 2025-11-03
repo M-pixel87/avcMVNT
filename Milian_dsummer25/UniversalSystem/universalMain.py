@@ -42,7 +42,7 @@ sensors = sensorSystem(ser)
 display = DisplaySystem(cam.camera, mode="YOLO")
 
 #AI CONTROL
-ai_Inputs = AI_Inputs(frame_width=cam.frame_width, frame_height=cam.frame_height)
+ai_Inputs = AI_Inputs(frame_width=cam.width, frame_height=cam.height)
 
 #Handle how fast the program runs
 max_fps = 60
@@ -67,21 +67,25 @@ def inputDisplay():
      # MAIN PYGAME EVENT PROCESSING : CONTROLLER INPUTS
     pygame.event.pump()
 
+    ctrl_data = controller.poll()
     # Get input values if controller is connected
     if(controller.connected):
         ai_Inputs.driving = False
-        ctrl_data = controller.poll()
         motors.set_power(ctrl_data["L"], ctrl_data["R"])
     
     img = cam.get_frame()
     detections = infer.detect(img)
-
+    
     # AI DRIVING MODE
     if(detections and controller.connected is False):
-        ai_Inputs.update_target(detections[0], img.shape[1], img.shape[0])
-        ai_data = ai_Inputs.get_ai_commands()
+        ai_Inputs.update_target(detections[0])
+        ai_data = ai_Inputs.move_command()
         motors.set_power(ai_data["L"], ai_data["R"])
-    
+    elif(controller.connected is False):
+        ai_Inputs.driving = False
+        ai_data = ai_Inputs.move_command()
+        motors.set_power(ai_data["L"], ai_data["R"])
+
      # SENSOR READING
     data = sensors.readSensors()
 

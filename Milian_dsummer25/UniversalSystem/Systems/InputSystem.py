@@ -144,6 +144,7 @@ class cvWebcam:
             self.camera = cv2.VideoCapture(cam_id)
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            self.camera.set(cv2.CAP_PROP_FPS, 60)
 
             if not self.camera.isOpened():
                 raise RuntimeError(f"Failed to open camera {cam_id}")
@@ -364,13 +365,18 @@ class AI_Inputs:
 
     def update_target(self, detection):
         """Update target position from a detection (x,y center coords)"""
+        self.target_pos["x"] = detection["center"][0] # x center of detection
+        self.target_pos["y"] = detection["center"][1] # y center of detection
+        self.driving = True
+        
         if detection is None:
             self.driving = False
+            self.move_command()
             return
-            
-        self.target_pos["x"] = detection[0]  # x center of detection
-        self.target_pos["y"] = detection[1]  # y center of detection
-        self.driving = True
+
+        if(detection["width"] >= 150):
+            self.driving = False
+
         
     def move_command(self):
         """Generate motor commands to center on target"""
@@ -404,8 +410,8 @@ class AI_Inputs:
                 right_speed = self.max_speed
                 
         # This ensures speeds are within min/max bounds
-        left_speed = max(self.min_speed, min(left_speed, self.max_speed))
-        right_speed = max(self.min_speed, min(right_speed, self.max_speed))
+        left_speed = max(self.min_speed, min(left_speed, self.max_speed)) *-1
+        right_speed = max(self.min_speed, min(right_speed, self.max_speed)) *-1
         
         self.data = {"L": int(left_speed), "R": int(right_speed)}
         return self.data

@@ -40,12 +40,22 @@ class DisplaySystem:
 class DisplaySystem_YOLO:
     def __init__(self, window_name="YOLO Display"):
         self.window_name = window_name
-
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+
+        # --- FPS tracking variables ---
+        self.prev_time = time.time()
+        self.fps = 0.0
 
     def update_display(self, frame, detections=None, axes=None, buttons=None, motor_output=None, data=None):
         if frame is None:
             return
+
+        # --- FPS calculation ---
+        curr_time = time.time()
+        delta_time = curr_time - self.prev_time
+        if delta_time > 0:
+            self.fps = 1.0 / delta_time
+        self.prev_time = curr_time
 
         # Draw YOLO detections
         if detections:
@@ -60,23 +70,31 @@ class DisplaySystem_YOLO:
                 cv2.putText(frame, text, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
+        # --- Overlay FPS counter ---
+        cv2.putText(frame, f"FPS: {self.fps:.1f}", (10, 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
         # Overlay control data
-        y = 20
+        y = 45  # start below FPS text
         if axes is not None:
-            cv2.putText(frame, f"Axes: {['%.2f' % a for a in axes]}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+            cv2.putText(frame, f"Axes: {['%.2f' % a for a in axes]}", (10, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
             y += 20
         if buttons is not None:
-                cv2.putText(frame, f"Buttons: {buttons}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                y += 20
+            cv2.putText(frame, f"Buttons: {buttons}", (10, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+            y += 20
         if motor_output is not None:
-            cv2.putText(frame, f"Motors: {motor_output[0]}, {motor_output[1]}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+            cv2.putText(frame, f"Motors: {motor_output[0]}, {motor_output[1]}", (10, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
             y += 20
         if data is not None:
             for key, value in data.items():
-                cv2.putText(frame, f"{key}: {value}", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                cv2.putText(frame, f"{key}: {value}", (10, y),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 y += 20
 
-      
+        # --- Show image ---
         cv2.imshow(self.window_name, frame)
 
         # Check for quit
@@ -85,8 +103,6 @@ class DisplaySystem_YOLO:
 
     def close(self):
         cv2.destroyAllWindows()
-
-
 
 
 
