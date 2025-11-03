@@ -251,9 +251,9 @@ class XboxController:
         self.last_wristA = self.wristA
 
         if pygame.joystick.get_count() == 0:
-            self.controller = False
+            self.connected = False
         else:
-            self.controller = True
+            self.connected = True
             self.joystick = pygame.joystick.Joystick(0)
             self.joystick.init()
             print(f"✅ Controller: {self.joystick.get_name()}")
@@ -262,7 +262,7 @@ class XboxController:
         return int(val * 100)
 
     def poll(self):
-        if(self.controller is not False):
+        if(self.connected is not False):
             if(self.mode == 0):
                 left_y = self.joystick.get_axis(1)
                 right_y = self.joystick.get_axis(3)
@@ -342,20 +342,71 @@ class XboxController:
         return self.data
 
     def get_axes(self):
-        if(self.controller):
+        if(self.connected):
             return [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())]
         else:
             return [0]
 
 class AI_Inputs:
-    def __init__(self):
+    def __init__(self, frame_width=640, frame_height=480):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
+        self.frame_width = frame_width  
+        self.frame_height = frame_height  
         self.driving = False
         
+        # Control parameters
+        self.center_threshold = 50  # pixels from center to consider "centered"
+        self.max_speed = 50  # maximum speed
+        self.min_speed = 20  # speed for friction
+        self.turn_scale = 0.5  #turn co-efficent
+        
+
+    def update_target(self, detection):
+        """Update target position from a detection (x,y center coords)"""
+        if detection is None:
+            self.driving = False
+            return
+            
+        self.target_pos["x"] = detection[0]  # x center of detection
+        self.target_pos["y"] = detection[1]  # y center of detection
+        self.driving = True
+        
     def move_command(self):
+        """Generate motor commands to center on target"""
         left_speed = 0
         right_speed = 0
-        if self.target_pos{"x"} >= 0:
-            self.data = {"L": left_speed, "R": right_speed}
-
+        
+        if not self.driving:
+            self.data = {"L": 0, "R": 0}
+            return self.data
+            
+        # Calculate error/dif from center
+        frame_center_x = self.frame_width / 2
+        error = self.target_pos["x"] - frame_center_x
+        
+        # Check if centered
+        if abs(error) < self.center_threshold:
+            # Centered - drive forward
+            left_speed = self.max_speed
+            right_speed = self.max_speed
+        else:
+            # Need to turn - adjust speeds proportionally
+            turn_amount = (error / frame_center_x) * self.turn_scale
+            
+            if error > 0:  # Target is to the right
+                # Turn right - slow down right motor
+                left_speed = self.max_speed
+                right_speed = self.max_speed * (1 - turn_amount)
+            else:  # Target is to the left
+                # Turn left - slow down left motor
+                left_speed = self.max_speed * (1 + turn_amount)
+                right_speed = self.max_speed
+                
+        # This ensures speeds are within min/max bounds
+        left_speed = max(self.min_speed, min(left_speed, self.max_speed))
+        right_speed = max(self.min_speed, min(right_speed, self.max_speed))
+        
+        self.data = {"L": int(left_speed), "R": int(right_speed)}
+        return self.data
+        
