@@ -8,6 +8,7 @@ from Systems.sensorSystem import sensorSystem
 from Systems.displaySystem import DisplaySystem
 from Systems import MappingSystem as mapSys
 from Systems import locationObjects
+from Systems.InputSystem import AI_Inputs
 
 from Arm import CoOrdinateBaseSys as Arm
 
@@ -40,6 +41,8 @@ sensors = sensorSystem(ser)
 # Initialize display system (use cam.camera to check if camera is available)  (Mode options: "GPU", "TK", "YOLO")
 display = DisplaySystem(cam.camera, mode="YOLO")
 
+#AI CONTROL
+ai_Inputs = AI_Inputs(frame_width=cam.frame_width, frame_height=cam.frame_height)
 
 #Handle how fast the program runs
 max_fps = 60
@@ -64,14 +67,22 @@ def inputDisplay():
      # MAIN PYGAME EVENT PROCESSING : CONTROLLER INPUTS
     pygame.event.pump()
 
-    # Get input values
-    ctrl_data = controller.poll()
-    
-    motors.set_power(ctrl_data["L"], ctrl_data["R"])
+    # Get input values if controller is connected
+    if(controller.connected):
+        ai_Inputs.driving = False
+        ctrl_data = controller.poll()
+        motors.set_power(ctrl_data["L"], ctrl_data["R"])
     
     img = cam.get_frame()
     detections = infer.detect(img)
 
+    # AI DRIVING MODE
+    if(detections and controller.connected is False):
+        ai_Inputs.update_target(detections[0], img.shape[1], img.shape[0])
+        ai_data = ai_Inputs.get_ai_commands()
+        motors.set_power(ai_data["L"], ai_data["R"])
+    
+     # SENSOR READING
     data = sensors.readSensors()
 
     '''FAILED ACCELEROMETER CODE'''
