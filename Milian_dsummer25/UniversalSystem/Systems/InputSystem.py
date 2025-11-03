@@ -346,3 +346,16 @@ class XboxController:
             return [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())]
         else:
             return [0]
+
+class AI_Inputs:
+    def __init__(self):
+        self.data = {"L": 0, "R": 0}
+        self.target_pos = {"x": 0, "y": 0}
+        self.driving = False
+        
+    def move_command(self):
+        left_speed = 0
+        right_speed = 0
+        if self.target_pos{"x"} >= 0:
+            self.data = {"L": left_speed, "R": right_speed}
+

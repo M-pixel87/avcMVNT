@@ -33,8 +33,9 @@ infer = AI_YOLO(conf_threshold=0.3)
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
 sensors = sensorSystem(ser)
 
+'''FAILED ACCELEROMETER CODE'''
 #create and initialize map
-map = mapSys.Map(w=30, h=30, r=20, c=20)
+#map = mapSys.Map(w=30, h=30, r=20, c=20)
 
 # Initialize display system (use cam.camera to check if camera is available)  (Mode options: "GPU", "TK", "YOLO")
 display = DisplaySystem(cam.camera, mode="YOLO")
@@ -72,7 +73,9 @@ def inputDisplay():
     detections = infer.detect(img)
 
     data = sensors.readSensors()
-    map.vehicle.update_position( data["ax"], data["ay"],data["Roll"])
+
+    '''FAILED ACCELEROMETER CODE'''
+    #map.vehicle.update_position( data["ax"], data["ay"],data["Roll"])
 
     display.update_display(
         img,
