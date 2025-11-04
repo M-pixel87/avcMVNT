@@ -54,8 +54,6 @@ class AI:
 # ==============================================================
 # Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
-
-
 class AI_YOLO:
     def __init__(self, model_path='/home/uafs/Downloads/best.engine', conf_threshold=0.5):
         self.model_path = model_path
@@ -360,7 +358,7 @@ class AI_Inputs:
         
         # Control parameters
         self.center_threshold = 50  # pixels from center to consider "centered"
-        self.max_speed = 50  # maximum speed
+        self.max_speed = 60  # maximum speed (% from 0 - 100)
         self.min_speed = 20  # speed for friction
         self.turn_scale = 0.5  #turn co-efficent
         
@@ -379,8 +377,6 @@ class AI_Inputs:
         if(detection["width"] >= 150):
             self.driving = False
 
-
-
         
     def move_command(self):
         """Generate motor commands to center on target"""
@@ -398,7 +394,7 @@ class AI_Inputs:
         # Check if centered
         if abs(error) < self.center_threshold:
             # Centered - drive forward
-            left_speed = self.max_speed
+            left_speed = self.max_speed 
             right_speed = self.max_speed
         else:
             # Need to turn - adjust speeds proportionally
