@@ -349,12 +349,15 @@ class XboxController:
             return [0]
 
 class AI_Inputs:
-    def __init__(self, frame_width=640, frame_height=480):
+    def __init__(self, frame_width=640, frame_height=480, sensorData = None):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.frame_width = frame_width  
         self.frame_height = frame_height  
         self.driving = False
+
+        self.sensorData = sensorData
+        self.mode = 0
         
         # Control parameters
         self.center_threshold = 50  # pixels from center to consider "centered"
@@ -390,24 +393,35 @@ class AI_Inputs:
         # Calculate error/dif from center
         frame_center_x = self.frame_width / 2
         error = self.target_pos["x"] - frame_center_x
-        
-        # Check if centered
-        if abs(error) < self.center_threshold:
-            # Centered - drive forward
-            left_speed = self.max_speed 
-            right_speed = self.max_speed
-        else:
-            # Need to turn - adjust speeds proportionally
-            turn_amount = (error / frame_center_x) * self.turn_scale
-            
-            if error > 0:  # Target is to the right
-                # Turn right - slow down right motor
-                left_speed = self.max_speed
-                right_speed = self.max_speed * (1 - turn_amount)
-            else:  # Target is to the left
-                # Turn left - slow down left motor
-                left_speed = self.max_speed * (1 + turn_amount)
+        if(mode == 0 or mode == 1):
+            # Check if centered
+            if abs(error) < self.center_threshold:
+                # Centered - drive forward
+                left_speed = self.max_speed 
                 right_speed = self.max_speed
+            else:
+                # Need to turn - adjust speeds proportionally
+                turn_amount = (error / frame_center_x) * self.turn_scale
+                
+                if error > 0:  # Target is to the right
+                    # Turn right - slow down right motor
+                    left_speed = self.max_speed
+                    right_speed = self.max_speed * (1 - turn_amount)
+                else:  # Target is to the left
+                    # Turn left - slow down left motor
+                    left_speed = self.max_speed * (1 + turn_amount)
+                    right_speed = self.max_speed
+
+        #For detecting hulahoop and stopping before hitting it and stopping, only while in mode 1
+        if(self.mode == 1):
+            if(self.sensorData["RightUno"] <= 200):
+                right_speed = 0
+            if(self.sensorData["LeftUno"] <= 200):
+                left_speed = 0
+            if(right_speed == 0 and left_speed = 0):
+                #Sets to arm grabbing mode
+                mode == 2
+            
                 
         # This ensures speeds are within min/max bounds
         left_speed = max(self.min_speed, min(left_speed, self.max_speed)) *-1
