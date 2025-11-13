@@ -88,7 +88,7 @@ def inputDisplay():
 
      # SENSOR READING
     data = sensors.readSensors()
-    print(data)
+    #print(data)
     '''FAILED ACCELEROMETER CODE'''
     #map.vehicle.update_position( data["ax"], data["ay"],data["Roll"])
 

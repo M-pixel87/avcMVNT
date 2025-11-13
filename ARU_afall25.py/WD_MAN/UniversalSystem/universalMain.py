@@ -93,7 +93,7 @@ frame_delay = 1.0 / max_fps
 
 print("Waiting for start signal ")
 while True:
-    line = self.ser.readline().decode(errors='ignore').strip()
+    line = ser.readline().decode(errors='ignore').strip()
     if not line:
         print("No code yet, still waiting...")
         time.sleep(0.1) 
@@ -105,7 +105,7 @@ while True:
             if 0 <= number <= 8: #16 digits what we want
                 print(f"We got our value ({number}), time to start!")
                 ready = "StartMVMNT"
-                self.ser.write(ready.encode("utf-8"))
+                ser.write(ready.encode("utf-8"))
                 break 
             else:
                 print(f"Got 'Start:', but number {number} is not in range 0-8.")

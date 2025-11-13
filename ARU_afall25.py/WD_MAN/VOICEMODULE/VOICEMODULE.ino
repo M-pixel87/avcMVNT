@@ -24,7 +24,7 @@ void setup() {
   while (!(asr.begin())) {
     delay(300);
   }
-  //Serial.println("Begin ok!");
+  Serial.println("Begin ok!");
 
   /**
   @brief Set commands of the module
@@ -46,6 +46,7 @@ void loop() {
   @return Return the obtained command word ID, returning 0 means no valid ID is obtained
   */
   uint8_t CMDID = asr.getCMDID();
+  Serial.println(CMDID);
 
   // --- Step 1: Listen for the initial command (5-13) ---
   if (CMDID >= 5 && CMDID <= 13) {
@@ -59,7 +60,7 @@ void loop() {
     message += String(numberToSend);
 
     // Let user know we are waiting for confirmation
-    //Serial.println("Waiting for confirmation (ID 22)...");
+    Serial.println("Waiting for confirmation (ID 22)...");
     
     // Play a sound to ask for confirmation (e.g., a "beep?" sound if you have one)
     // asr.playByCMDID(YOUR_CONFIRM_BEEP_ID); 
@@ -92,7 +93,7 @@ void loop() {
       }
 
       // --- Step 5: Check for a timeout ---
-      if (millis() - startTime > 10000) { // 10-second timeout
+      if (millis() - startTime > 20000) { // 10-second timeout
         // TIMED OUT!
         Serial.println("Confirmation timed out. Cancelling.");
         break; // Exit the "waiting for confirmation" loop
