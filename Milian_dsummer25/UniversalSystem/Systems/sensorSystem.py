@@ -17,7 +17,7 @@ class sensorSystem:
             # Handle IMU data line: "IMU,roll,pitch,yaw,ax,ay,az"
             if line.startswith("IMU,"):
                 parts = line.split(',')
-                if len(parts) == 7:
+                if len(parts) >= 7:
                     try:
                         _, roll, pitch, yaw, ax, ay, az = parts
                         self.data = {

@@ -393,7 +393,7 @@ class AI_Inputs:
         # Calculate error/dif from center
         frame_center_x = self.frame_width / 2
         error = self.target_pos["x"] - frame_center_x
-        if(mode == 0 or mode == 1):
+        if(self.mode == 0 or self.mode == 1):
             # Check if centered
             if abs(error) < self.center_threshold:
                 # Centered - drive forward
@@ -418,9 +418,9 @@ class AI_Inputs:
                 right_speed = 0
             if(self.sensorData["LeftUno"] <= 200):
                 left_speed = 0
-            if(right_speed == 0 and left_speed = 0):
+            if(right_speed == 0 and left_speed == 0):
                 #Sets to arm grabbing mode
-                mode == 2
+                self.mode == 2
             
                 
         # This ensures speeds are within min/max bounds
