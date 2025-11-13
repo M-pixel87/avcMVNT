@@ -116,18 +116,21 @@ while True:
 print("Work is starting...")
 
 
-
-first boot 
-start
-
-UnboundLocalError
-2<_ code1  3<- preset
-
-2 -
-display this message
-while true 
-preset 
-
+# =============================================================================
+# --- NEW TEST LOOP ADDED AS REQUESTED ---
+# This loop will run indefinitely after the start signal is received.
+# It will print a message every 2 seconds.
+# Press Ctrl+C in the terminal to stop this loop and proceed to the main program.
+# =============================================================================
+print("\nENTERING TEST LOOP (prints every 2 seconds).")
+print("Press Ctrl+C to stop test and continue to main program.")
+try:
+    while True:
+        print("hey your program work")
+        time.sleep(2)
+except KeyboardInterrupt:
+    print("\nTest loop stopped by user. Proceeding to main program...")
+# --- END OF TEST LOOP ---
 
 
 
