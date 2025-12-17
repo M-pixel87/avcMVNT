@@ -97,7 +97,7 @@ def ik(x, y, z, angles, error):  # angles = [theta1, theta2, theta3]
 
 def main():
     #xyzTest()
-    ik(12,0,-1, angles, 0)
+    ik(12,0,10, angles, 0)
     roarm.joints_angle_ctrl(angles, 300, 100)
 
 
