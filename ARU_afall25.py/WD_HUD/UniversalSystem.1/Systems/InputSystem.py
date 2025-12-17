@@ -1,4 +1,5 @@
 import os
+import time
 
 # Headless mode (no display)
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -14,6 +15,8 @@ import jetson_utils
 import cv2
 import pygame
 from Arm import CoOrdinateBaseSys as Arm
+from Systems.mode_State import modeState
+
 
 
 
@@ -236,10 +239,13 @@ class Webcam:
 
 
 class XboxController:
-    def __init__(self, deadzone=0.05):
+    def __init__(self, state: modeState , deadzone=0.05):
         self.deadzone = deadzone
         self.data = {"L": 0, "R": 0, "buttons": []}
         self.mode = 0  # start in drive mode (0=drive, 1=arm)
+
+        self.state = state
+
         self.x = 10
         self.y = 0
         self.z = 10
@@ -302,24 +308,31 @@ class XboxController:
                 if abs(right_y) > deadzone:
                     self.y -= right_y * step_size
 
-                # ARM CONTROL: Only send if changed
-                if (self.x, self.y, self.z) != self.last_xyz:
-                    Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
-                    self.last_xyz = (self.x, self.y, self.z)
+                # ARM CONTROL: Only send if changed and if in manual
+                if(self.state.mode == False):
+                    if (self.x, self.y, self.z) != self.last_xyz:
+                        Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
+                        self.last_xyz = (self.x, self.y, self.z)
 
-                if self.jawA != self.last_jawA:
-                    Arm.move_joint(5, self.jawA)
-                    self.last_jawA = self.jawA
+                    if self.jawA != self.last_jawA:
+                        Arm.move_joint(5, self.jawA)
+                        self.last_jawA = self.jawA
 
-                if self.wristA != self.last_wristA:
-                    Arm.move_joint(4, self.wristA)
-                    self.last_wristA = self.wristA
+                    if self.wristA != self.last_wristA:
+                        Arm.move_joint(4, self.wristA)
+                        self.last_wristA = self.wristA
 
             buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
             if buttons[0] == 1:
                 print("A pressed")
                 self.mode = 1 if self.mode == 0 else 0
                 print(f"🔀 Mode: {'ARM' if self.mode == 1 else 'DRIVE'}")
+                time.sleep(0.5)
+
+            if buttons[1] == 1:
+                self.state.toggle()
+                print(f"🔀 Mode: {'AI' if self.state.mode == True else 'MANUAL'}")
+                time.sleep(0.5)
 
             if buttons[4] == 1:
                 self.jawA += 2
@@ -349,12 +362,14 @@ class XboxController:
             return [0]
 
 class AI_Inputs:
-    def __init__(self, frame_width=640, frame_height=480, sensorData = None):
+    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData = None):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.frame_width = frame_width  
         self.frame_height = frame_height  
         self.driving = False
+
+        self.state = state
 
         self.sensorData = sensorData
         self.mode = 0
@@ -414,9 +429,9 @@ class AI_Inputs:
 
         #For detecting hulahoop and stopping before hitting it and stopping, only while in mode 1
         if(self.mode == 1):
-            if(self.sensorData["RightUno"] <= 200):
+            if(self.sensorData["RightUno"] <= 60):
                 right_speed = 0
-            if(self.sensorData["LeftUno"] <= 200):
+            if(self.sensorData["LeftUno"] <= 60):
                 left_speed = 0
             if(right_speed == 0 and left_speed == 0):
                 #Sets to arm grabbing mode

@@ -9,12 +9,18 @@ from Systems.displaySystem import DisplaySystem
 from Systems import MappingSystem as mapSys
 from Systems import locationObjects
 from Systems.InputSystem import AI_Inputs
+from Systems.mode_State import modeState
 
 from Arm import CoOrdinateBaseSys as Arm
 
 import pygame
 import time
 import serial
+
+
+
+
+inputState = modeState()
 
 # Setup serial for Arduino communication
 PORT = "/dev/ttyACM0"
@@ -25,8 +31,10 @@ ser = serial.Serial(PORT, BAUD, timeout=0.1)
 pygame.init()
 pygame.joystick.init()
 
+
+
 # Create system objects
-controller = XboxController()
+controller = XboxController(state = inputState)
 cam = cvWebcam()
 infer = AI_YOLO(conf_threshold=0.3)
 
@@ -34,15 +42,12 @@ infer = AI_YOLO(conf_threshold=0.3)
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
 sensors = sensorSystem(ser)
 
-'''FAILED ACCELEROMETER CODE'''
-#create and initialize map
-#map = mapSys.Map(w=30, h=30, r=20, c=20)
 
 # Initialize display system (use cam.camera to check if camera is available)  (Mode options: "GPU", "TK", "YOLO")
 display = DisplaySystem(cam.camera, mode="YOLO")
 
 #AI CONTROL
-ai_Inputs = AI_Inputs(frame_width=cam.width, frame_height=cam.height)
+ai_Inputs = AI_Inputs(frame_width=cam.width, frame_height=cam.height, state = inputState)
 
 #Handle how fast the program runs
 max_fps = 60
@@ -64,6 +69,7 @@ def main():
         print("Stopping...")
 
 def inputDisplay():
+    active_Cmd = {"L": 0, "R": 0}
      # MAIN PYGAME EVENT PROCESSING : CONTROLLER INPUTS
     pygame.event.pump()
 
@@ -72,48 +78,47 @@ def inputDisplay():
     if(controller.connected):
         ai_Inputs.driving = False
         motors.set_power(ctrl_data["L"], ctrl_data["R"])
+        active_Cmd = {"L": ctrl_data["L"], "R": ctrl_data["R"]}
     
     img = cam.get_frame()
     detections = infer.detect(img)
     
+
     # AI DRIVING MODE
-    if(detections and controller.connected is False):
+    if((detections and controller.connected is False) or (detections and inputState.mode == True)):
         ai_Inputs.update_target(detections[0])
         ai_data = ai_Inputs.move_command()
         motors.set_power(ai_data["L"], ai_data["R"])
+        active_Cmd = {"L": ai_data["L"], "R": ai_data["R"]}
     elif(controller.connected is False):
+        #if there is no detections but is in AI mode it just stays still
         ai_Inputs.driving = False
         ai_data = ai_Inputs.move_command()
         motors.set_power(ai_data["L"], ai_data["R"])
+        active_Cmd = {"L": ai_data["L"], "R":ai_data["R"]}
+
 
      # SENSOR READING
     data = sensors.readSensors()
-    #print(data)
-    '''FAILED ACCELEROMETER CODE'''
-    #map.vehicle.update_position( data["ax"], data["ay"],data["Roll"])
+   
+
+
 
     display.update_display(
         img,
         detections,
         controller.get_axes(),  # show all axes
         ctrl_data["buttons"],
-        (ctrl_data["L"], ctrl_data["R"]),
-        data
+        (active_Cmd["L"], active_Cmd["R"]),
+        data,
+        inputState
     )
 
-def testPickup():
-    arm = Arm.CoOrdinateBaseSys(ser)
-    time.sleep(1)
-    arm.moveTo(10,10,0)
-    time.sleep(2)
-    arm.moveTo(10,2,0)
-    arm.move_joint(4, 90)
-    arm.move_joint(5, 60)
-    time.sleep(2)
-    arm.move_joint(5, 10)
-    time.sleep(2)
-    arm.moveTo(10,10,0)
-    time.sleep(2)
 
 if __name__ == "__main__":
     main()
+
+
+
+
+

@@ -5,6 +5,7 @@ from PIL import Image, ImageTk
 import jetson_utils
 import cv2
 import time
+from Systems.mode_State import modeState
 
 
 class DisplaySystem:
@@ -20,10 +21,10 @@ class DisplaySystem:
         else:
             raise ValueError(f"Unknown or unsupported display mode: {mode}")
 
-    def update_display(self, img=None, detections=None, axes=None, buttons=None, motor_output=None, data=None):
+    def update_display(self, img=None, detections=None, axes=None, buttons=None, motor_output=None, data=None, state: modeState = None):
         """Universal update_display interface for all display types."""
         if self.mode == "YOLO":
-            self._impl.update_display(img, detections, axes, buttons, motor_output, data)
+            self._impl.update_display(img, detections, axes, buttons, motor_output, data, state)
         elif self.mode == "GPU":
             self._impl.update_display(axes, buttons, motor_output, img, data)
         elif self.mode == "TK":
@@ -46,7 +47,7 @@ class DisplaySystem_YOLO:
         self.prev_time = time.time()
         self.fps = 0.0
 
-    def update_display(self, frame, detections=None, axes=None, buttons=None, motor_output=None, data=None):
+    def update_display(self, frame, detections=None, axes=None, buttons=None, motor_output=None, data=None, state: modeState = None):
         if frame is None:
             return
 
@@ -93,6 +94,10 @@ class DisplaySystem_YOLO:
                 cv2.putText(frame, f"{key}: {value}", (10, y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 y += 20
+        if state.mode is not None:
+                cv2.putText(frame, f"{'AI' if state.mode == True else 'MANUAL'}", (250, 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 255, 50), 2)
+                
 
         # --- Show image ---
         cv2.imshow(self.window_name, frame)
