@@ -1,3 +1,7 @@
+#this program runs two cameras at the same time with your yolo model this is
+# only a test but works and is meant to show you your FPS and lad time
+
+
 import cv2
 from ultralytics import YOLO
 import time
