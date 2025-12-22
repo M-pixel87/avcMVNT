@@ -1,3 +1,7 @@
+#This file should run your jetson inf trained model which to us is the classica and
+# then form that make a matrix of cunfions and such just to compare the perfmance bench marks
+# btwn this an dthen the yolo which is auto generated
+
 import jetson.inference
 import jetson.utils
 import os
