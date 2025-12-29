@@ -1,3 +1,9 @@
+#THis program will run your yolo model but itll be completly seen only in the terminal
+#this should cut down on some of the inferencing time so this might be a way in which we 
+#run it in the competion meant to check out the FPS and lag time
+
+
+
 import cv2
 from ultralytics import YOLO
 import time
