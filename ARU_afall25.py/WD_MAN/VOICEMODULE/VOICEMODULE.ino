@@ -6,15 +6,12 @@
 @param rx - UART The pin for receiving data
 @param tx - UART The pin for transmitting data
 */
-#if (defined(ARDUINO_AVR_UNO) || defined(ESP8266)) // Use software serial
-SoftwareSerial softSerial(/*rx =*/0, /*tx =*/1);
-DFRobot_DF2301Q_UART asr(/*softSerial =*/&softSerial);
-#elif defined(ESP32) // Use the hardware serial with remappable pin: Serial1
-DFRobot_DF2301Q_UART asr(/*hardSerial =*/&Serial1, /*rx =*/11, /*tx =*/12);
-#else // Use hardware serial: Serial1
-DFRobot_DF2301Q_UART asr(/*hardSerial =*/&Serial1);
 
-#endif
+SoftwareSerial softSerial(2, 3);
+DFRobot_DF2301Q_UART asr(/*softSerial =*/&softSerial);
+
+
+
 
 void setup() {
   // This is the UART connection to your computer (Serial Monitor)

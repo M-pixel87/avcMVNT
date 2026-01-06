@@ -78,6 +78,7 @@ class AI_YOLO:
                 box_width = x2 - x1
 
                 detections.append({
+                    "class_id": cls_id,
                     "label": label,
                     "confidence": conf,
                     "bbox": (int(x1), int(y1), int(x2), int(y2)),
@@ -272,7 +273,7 @@ class XboxController:
 # FIXED AI INPUTS CLASS (With String-to-Float Safety)
 # ==============================================================
 class AI_Inputs:
-    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData=None):
+    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData=None, targets = {"Empty","Empty","Empty"}):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.frame_width = frame_width
@@ -283,7 +284,10 @@ class AI_Inputs:
         self.leftActive = True
         self.state = state
         self.sensorData = sensorData
-        self.mode = 0  # 0=Approach, 2=Grab
+        self.mode = 1  # 0=Approach, 1 = stuck, 2=Grab
+
+        self.targets = targets
+        self.count = 0
         
         # Params
         self.center_threshold = 50
@@ -293,12 +297,13 @@ class AI_Inputs:
 
     def update_target(self, detection):
         if detection:
-            self.target_pos["x"] = detection["center"][0]
-            self.target_pos["y"] = detection["center"][1]
-            if detection["width"] < 150:
-                self.driving = True
-            else:
-                self.driving = False
+            if(detection["class_id"] == self.targets[self.count]):
+                self.target_pos["x"] = detection["center"][0]
+                self.target_pos["y"] = detection["center"][1]
+                if detection["width"] < 150:
+                    self.driving = True
+                else:
+                    self.driving = False
         else:
             self.driving = False
 
@@ -307,7 +312,7 @@ class AI_Inputs:
         right_speed = 0
         
         # 1. VISUAL DRIVING
-        if self.driving and (self.mode == 0 or self.mode == 1):
+        if self.driving and (self.mode == 0 ):
             error = self.target_pos["x"] - (self.frame_width / 2)
             
             if abs(error) < self.center_threshold:
@@ -323,7 +328,7 @@ class AI_Inputs:
                     right_speed = self.max_speed
 
         # 2. SENSOR STOP LOGIC (Overrides driving)
-        if self.mode == 0 or self.mode == 1:
+        if self.mode == 0 :
             # FIX: Get raw value, then FORCE convert to float
             r_raw = self.sensorData.get("RightUNO", 999) if self.sensorData else 999
             l_raw = self.sensorData.get("LeftUNO", 999) if self.sensorData else 999
@@ -341,10 +346,10 @@ class AI_Inputs:
             # Debug print to confirm it is working now
             # print(f"Dist: L={l_dist} R={r_dist}")
 
-            if r_dist <= 60:
+            if r_dist <= 50:
                 self.rightActive = False  
             
-            if l_dist <= 60:
+            if l_dist <= 50:
                 self.leftActive = False   
             
             # If both stopped, switch mode
