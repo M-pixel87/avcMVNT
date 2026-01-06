@@ -9,6 +9,7 @@ import time
 import serial
 
 inputState = modeState()
+pigsfly = True
 
 # Setup serial
 PORT = "/dev/ttyACM0"
@@ -34,6 +35,38 @@ max_fps = 60
 last_time = 0
 frame_delay = 1.0 / max_fps
 
+
+# CASES
+case1 = ["Green", "Red", "Yellow", "Blue"]
+case2 = ["Green", "Red", "Blue", "Yellow"]
+case3 = ["Green", "Yellow", "Red", "Blue"]
+case4 = ["Green", "Yellow", "Blue", "Red"]
+case5 = ["Green", "Blue", "Red", "Yellow"]
+case6 = ["Green", "Blue", "Yellow", "Red"]
+
+case7 = ["Red", "Green", "Yellow", "Blue"]
+case8 = ["Red", "Green", "Blue", "Yellow"]
+case9 = ["Red", "Yellow", "Green", "Blue"]
+case10 = ["Red", "Yellow", "Blue", "Green"]
+case11 = ["Red", "Blue", "Green", "Yellow"]
+case12 = ["Red", "Blue", "Yellow", "Green"]
+
+case13 = ["Yellow", "Green", "Red", "Blue"]
+case14 = ["Yellow", "Green", "Blue", "Red"]
+case15 = ["Yellow", "Red", "Green", "Blue"]
+case16 = ["Yellow", "Red", "Blue", "Green"]
+case17 = ["Yellow", "Blue", "Green", "Red"]
+case18 = ["Yellow", "Blue", "Red", "Green"]
+
+case19 = ["Blue", "Green", "Red", "Yellow"]
+case20 = ["Blue", "Green", "Yellow", "Red"]
+case21 = ["Blue", "Red", "Green", "Yellow"]
+case22 = ["Blue", "Red", "Yellow", "Green"]
+case23 = ["Blue", "Yellow", "Green", "Red"]
+case24 = ["Blue", "Yellow", "Red", "Green"]
+#-------------------------------------------
+
+
 def main():
     global last_time
     try:
@@ -48,13 +81,26 @@ def main():
         cam.release()
         infer.release()
 
+
+
+
+
 def inputDisplay():
+    global case1,case2,case3,case4
     active_Cmd = {"L": 0, "R": 0}
     
     # 1. READ SENSORS & UPDATE AI
     # This must happen first so AI knows distance
     data = sensors.readSensors()
     ai_Inputs.sensorData = data 
+
+    if(data["CMDID"] == "22"):
+        ai_Inputs.mode = 0
+        ai_Inputs.targets = case1
+        print("changed mode")
+    elif(data["CMDID"] == 23):
+        pass
+
 
     # 2. READ CONTROLLER
     pygame.event.pump()
@@ -70,7 +116,7 @@ def inputDisplay():
         ai_Inputs.driving = False
         active_Cmd = {"L": ctrl_data["L"], "R": ctrl_data["R"]}
     
-    # Case B: AI Mode (AI Mode is ON -OR- Controller disconnected)
+    # Case B: AI Mode (AI Mode is ON )
     else:
         # Update target if we see something
         if detections:

@@ -17,9 +17,9 @@ class sensorSystem:
             # Handle IMU data line: "IMU,roll,pitch,yaw,ax,ay,az"
             if line.startswith("IMU,"):
                 parts = line.split(',')
-                if len(parts) == 9:
+                if len(parts) == 10:
                     try:
-                        _, roll, pitch, yaw, ax, ay, az, right, left = parts
+                        _, roll, pitch, yaw, ax, ay, az, right, left, cmdid = parts
                         self.data = {
                             "Roll": round(float(roll), 2),
                             "Pitch": round(float(pitch), 2),
@@ -28,8 +28,9 @@ class sensorSystem:
                             "ay": round(float(ay), 3),
                             "az": round(float(az), 3),
                             "RightUNO" : right,
-                            "LeftUNO" : left
-
+                            "LeftUNO" : left,
+                            "CMDID" : cmdid
+    
                         }
                     except ValueError:
                         print(f"Bad IMU data: {line}")
