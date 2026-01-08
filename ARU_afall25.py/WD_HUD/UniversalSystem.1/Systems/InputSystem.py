@@ -357,6 +357,12 @@ class AI_Inputs:
                 print("🛑 TARGET REACHED -> Switching to Mode 2")
                 self.mode = 2
                 self.driving = False
+                
+        #ARM CONTROL MODE
+        if self.mode == 2:
+            left_speed = 0
+            right_speed = 0
+
 
         # 3. APPLY OUTPUT
         if not self.leftActive: left_speed = 0
