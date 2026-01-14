@@ -1,6 +1,7 @@
 import os
 import time
 import torch
+import numpy as np
 from ultralytics import YOLO
 import jetson_inference
 import jetson_utils
@@ -8,6 +9,7 @@ import cv2
 import pygame
 from Arm import CoOrdinateBaseSys as Arm
 from Systems.mode_State import modeState
+import pyrealsense2 as rs
 
 # Headless mode setup
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -109,6 +111,45 @@ class AI_YOLO:
         """Graceful shutdown of any resources."""
         cv2.destroyAllWindows()
         print("🧹 YOLO resources released.")
+
+
+
+#Use for intel D435i Realsense camera module
+class intelCamera:
+    def __init__(self, width=640, height=480, fps=30):
+        self.width = width
+        self.height = height
+        self.fps = fps
+
+        # Configure depth and color streams
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
+        self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
+        self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
+
+        # Start streaming
+        self.pipeline.start(self.config)
+        print(f"✅ Intel RealSense camera initialized [{width}x{height} @ {fps} FPS]")
+
+    def get_frames(self):
+        frames = self.pipeline.wait_for_frames()
+        depth_frame = frames.get_depth_frame()
+        color_frame = frames.get_color_frame()
+
+        if not depth_frame or not color_frame:
+            return None, None
+
+        depth_image = np.asanyarray(depth_frame.get_data())
+        color_image = np.asanyarray(color_frame.get_data())
+
+        return depth_image, color_image
+
+    def release(self):
+        self.pipeline.stop()
+        print("Intel RealSense camera released.")
+
+
+
 
 class cvWebcam:
     def __init__(self, cam_id=0, width=640, height=480):
