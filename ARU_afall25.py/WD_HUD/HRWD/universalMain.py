@@ -14,9 +14,7 @@ from itertools import permutations
 # --- GLOBAL STATE INIT ---
 inputState = modeState()
 
-# =========================================================================
-# 1. DEFINE MOCK SERIAL CLASS
-# =========================================================================
+
 class MockSerial:
     """
     A fake serial class that mimics the behavior of the real PySerial object
@@ -36,13 +34,9 @@ class MockSerial:
     def close(self):
         pass
 
-# =========================================================================
-# 2. PROMPT USER & HARDWARE SETUP
-# =========================================================================
+
 PORT = "/dev/ttyACM0"
 BAUD = 115200
-
-# Ask the user before attempting connection
 
 
 try:
@@ -52,12 +46,6 @@ except serial.SerialException as e:
     print(f"❌ Connection Failed: {e}")
     print("⚠️  Falling back to MOCK SERIAL mode.")
     ser = MockSerial()
-
-
-# =========================================================================
-# 3. OBJECT INSTANTIATION (Standard logic continues below)
-# =========================================================================
-
 
 
 
@@ -76,21 +64,16 @@ display = DisplaySystem(cam.camera, mode="YOLO")
 ai_Inputs = AI_Inputs(frame_width=cam.width, frame_height=cam.height, state=inputState)
 
 # --- TIMING VARIABLES ---
-max_fps = 60                   # Target speed of the loop
-last_time = 0                  # Tracks when the previous loop finished
-frame_delay = 1.0 / max_fps    # Minimum time per frame (approx 0.016 seconds)
+max_fps = 60                   
+last_time = 0                  
+frame_delay = 1.0 / max_fps    
 
 
 # --- LOGIC CONFIGURATION ---
 # Define the possible colors the robot might look for.
 BASE_COLORS = ["Green", "Red", "Yellow", "Blue"]
-
-# Generate all possible orders of these colors (e.g., Green-Red-Yellow-Blue, Red-Green...)
-# This is likely for a challenge where the robot must visit colors in a specific order.
 ALL_CASES = [list(p) for p in permutations(BASE_COLORS)]
 
-# Map specific command IDs (received from sensors/RFID?) to a specific case index.
-# Example: If sensors read ID "22", the robot targets the 0th permutation.
 CMD_TO_CASE_MAP = {
     "22": 0,  # Case 1
     "23": 1,  # Case 2
@@ -100,86 +83,61 @@ CMD_TO_CASE_MAP = {
 
 # --- MAIN ENTRY POINT ---
 def main():
-    global last_time  # Allow modification of the global timer variable
+    global last_time  
     try:
-        # Start an infinite loop
         while True:
-            now = time.time()  # Get current time
-            
+            now = time.time()  
             # Rate Limiter: Only run the logic if enough time has passed (60 FPS cap)
             if now - last_time >= frame_delay:
-                inputDisplay() # Call the main logic function
-                last_time = now # Reset the timer
+                inputDisplay() 
+                last_time = now 
                 
     except KeyboardInterrupt:
-        # If user presses Ctrl+C, run this safety code:
         print("Stopping...")
-        motors.set_power(0, 0) # Emergency stop the wheels
-        cam.release()          # Free the camera
-        infer.release()        # Free the AI memory
+        motors.set_power(0, 0) 
+        cam.release()          
+        infer.release()        
 
 # --- CORE LOGIC LOOP ---
 def inputDisplay():
-    # Dictionary to hold the final Left/Right motor power values (Default 0)
     active_Cmd = {"L": 0, "R": 0}
     
-    # 1. READ SENSORS
-    # Ask the microcontroller for sensor data (Distance, Battery, Command IDs)
     data = sensors.readSensors()
-    
-    # Update the AI Driver with this data (so it knows when to stop if close to a wall)
     ai_Inputs.sensorData = data 
-
-    # Check if "CMDID" exists in data AND if it is a valid map key
-    # .get() returns None if the key is missing, preventing the crash
     cmd_id = data.get("CMDID")
     
     if cmd_id in CMD_TO_CASE_MAP:
-        # Find which color order corresponds to this ID
         case_index = CMD_TO_CASE_MAP[cmd_id]
-        # Tell the AI: "These are your new targets, in this order."
         ai_Inputs.targets = ALL_CASES[case_index]
+        print(ALL_CASES[case_index])
 
 
     # 2. READ CONTROLLER
-    pygame.event.pump()         # Refresh Pygame internal event queue
-    ctrl_data = controller.poll() # Get current joystick positions and button presses
+    pygame.event.pump()         
+    ctrl_data = controller.poll() 
 
     # 3. VISION INFERENCE
-    img = cam.get_frame()       # Grab a photo
-    detections = infer.detect(img) # Ask YOLO: "Where are the objects in this photo?"
+    img = cam.get_frame()       
+    detections = infer.detect(img)
 
-    # 4. CONTROL LOGIC (The Brain)
-    
-    # CHECK: Is the Controller plugged in? AND Is AI Mode turned OFF?
+
     if controller.connected and not inputState.mode:
         # --- MANUAL MODE ---
         ai_Inputs.driving = False # Tell AI to relax
-        # Map the Joystick L/R values directly to the motor command
         active_Cmd = {"L": ctrl_data["L"], "R": ctrl_data["R"]}
     
     else:
         # --- AI MODE ---
-        # Update the AI with the objects we saw (Vision Tracking)
         if detections:
-            ai_Inputs.update_target(detections[0]) # Lock onto the first object found
+            ai_Inputs.update_target(detections[0])
         else:
-            # If blind, stop driving (Safety)
             ai_Inputs.driving = False
-
-        # Run the AI movement logic. 
-        # Note: We run this even if 'driving' is False, so it can handle state transitions 
-        # or sensor checks.
         ai_data = ai_Inputs.move_command()
         
-        # Override the motor command with the AI's calculation
         active_Cmd = {"L": ai_data["L"], "R": ai_data["R"]}
 
-    # 5. SEND TO MOTORS
-    # Physically send the calculated power to the wheel controllers
     motors.set_power(active_Cmd["L"], active_Cmd["R"])
 
-    # 6. DISPLAY
     # Draw the camera feed, bounding boxes, joystick status, and motor values to the screen.
     display.update_display(
         img,
@@ -191,6 +149,5 @@ def inputDisplay():
         inputState
     )
 
-# Standard Python check: Only run main() if this file is run directly (not imported)
 if __name__ == "__main__":
     main()
