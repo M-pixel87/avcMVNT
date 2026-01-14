@@ -6,6 +6,11 @@ class MotorSystem:
 
     def set_power(self, left, right):
         raise NotImplementedError("Override in subclass")
+    
+
+
+#this is the actuall class that we work with the abovue is the parent frame work of a motor for future uses 
+# this is called using motors.set_power
 
 class CytronMotor(MotorSystem):
     def __init__(self, in1, an1, in2, an2, ser):
