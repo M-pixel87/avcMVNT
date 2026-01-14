@@ -38,10 +38,10 @@ class AI:
             pass
 
 # ==============================================================
-# FIXED YOLO CLASS (TensorRT)
+# Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='/home/uafs/Downloads/best.engine', conf_threshold=0.5):
+    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/testMM/weights/best.engine', conf_threshold=0.5):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
@@ -54,14 +54,22 @@ class AI_YOLO:
             print(f"✅ Model loaded successfully ({len(self.class_names)} classes).")
         except Exception as e:
             print(f"❌ Error loading YOLO model: {e}")
+            print("ensure the .engine file exists")
             self.model = None
 
     def detect(self, frame, display=False):
+        """
+        Run YOLO inference on a frame.
+        Returns a list of detections (dicts) and optionally displays annotated frame.
+        """
         if self.model is None or frame is None:
             return []
 
+        # Run inference (TensorRT engine runs directly on GPU)
         results = self.model(frame, verbose=False)
+
         detections = []
+        frame_width = frame.shape[1]
 
         for result in results:
             for box in result.boxes:
@@ -73,10 +81,12 @@ class AI_YOLO:
                 cls_id = int(box.cls[0])
                 label = self.class_names.get(cls_id, f"class_{cls_id}")
 
+                # Calculate center and width
                 center_x = (x1 + x2) / 2
                 center_y = (y1 + y2) / 2
                 box_width = x2 - x1
 
+                # Append detection info
                 detections.append({
                     "class_id": cls_id,
                     "label": label,
@@ -85,15 +95,21 @@ class AI_YOLO:
                     "center": (int(center_x), int(center_y)),
                     "width": int(box_width)
                 })
+
+        # By default, does not display, but can show annotated frame if desired, this bypasses display system
+        if display:
+            annotated_frame = results[0].plot()
+            cv2.imshow("YOLO TensorRT Inference", annotated_frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                return "quit"
+
         return detections
 
     def release(self):
+        """Graceful shutdown of any resources."""
         cv2.destroyAllWindows()
         print("🧹 YOLO resources released.")
 
-# ==============================================================
-# FIXED CVWEBCAM CLASS
-# ==============================================================
 class cvWebcam:
     def __init__(self, cam_id=0, width=640, height=480):
         self.cam_id = cam_id
@@ -107,16 +123,26 @@ class cvWebcam:
             if not os.path.exists(path):
                 raise FileNotFoundError(f"No device found at {path}")
 
-            self.camera = cv2.VideoCapture(cam_id)
+            # 1. Force V4L2 (Correct for Jetson)
+            self.camera = cv2.VideoCapture(cam_id, cv2.CAP_V4L2)
+
+            # 2. DO NOT set FOURCC to MJPG. 
+            # Your camera only has YUYV, so we let it use the default.
+            
+            # 3. Set Resolution (640x480 is safe for YUYV)
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-            self.camera.set(cv2.CAP_PROP_FPS, 60)
+
+            # 4. Set FPS to 30 (Safest for YUYV format)
+            # Your list says 60 is possible, but YUYV is heavy and often times out at 60.
+            self.camera.set(cv2.CAP_PROP_FPS, 30)
 
             if not self.camera.isOpened():
                 raise RuntimeError(f"Failed to open camera {cam_id}")
 
             print(f"✅ cvWebcam initialized on {path} [{width}x{height}]")
             self.initialized = True
+
         except Exception as e:
             print(f"⚠️ cvWebcam init failed: {e}")
             self.camera = None
@@ -124,8 +150,10 @@ class cvWebcam:
     def get_frame(self):
         if not self.initialized or self.camera is None:
             return None
+
         ret, frame = self.camera.read()
         if not ret:
+            print("⚠️ Frame capture failed.")
             return None
         return frame
 
@@ -133,6 +161,66 @@ class cvWebcam:
         if self.camera:
             self.camera.release()
             self.initialized = False
+            print("🧹 cvWebcam released.")
+
+
+
+
+class Webcam:
+    def __init__(self, cam_id=0, width=640, height=480):
+        self.cam_id = cam_id
+        self.width = width
+        self.height = height
+        self.camera = None  # will stay None if no cam
+        self.display = None
+
+        # try to open a display
+        try:
+            self.display = jetson_utils.videoOutput(
+                "display://0",
+                argv=[f"--output-width={width}", f"--output-height={height}"]
+            )
+        except Exception as e:
+            print(f"⚠️ Display init failed: {e}")
+            self.display = None
+
+        # Now try to open camera
+        try:
+            path = f"/dev/video{cam_id}"
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"No device at {path}")
+
+            self.camera = jetson_utils.videoSource(
+                path,
+                argv=[f"--input-width={width}", f"--input-height={height}"]
+            )
+            print(f"✅ Camera initialized on {path}")
+        except Exception as e:
+            print(f"⚠️ Camera init failed: {e}")
+            self.camera = None
+
+    def get_frame(self):
+        if self.camera is None:
+            return None
+        try:
+            return self.camera.Capture()
+        except Exception as e:
+            print(f"⚠️ Capture failed: {e}")
+            return None
+
+    def show_frame(self, img):
+        if self.display is not None and img is not None:
+            self.display.Render(img)
+            self.display.SetStatus("Webcam Stream")
+        elif self.display is not None:
+            # just keep window alive even if no image
+            self.display.SetStatus("No Camera Feed")
+
+    def release(self):
+        if self.camera is not None:
+            self.camera.Close()
+        if self.display is not None:
+            self.display.Close()
 
 # ==============================================================
 # ORIGINAL LEGACY WEBCAM CLASS (Jetson Utils)
@@ -273,7 +361,7 @@ class XboxController:
 # FIXED AI INPUTS CLASS (With String-to-Float Safety)
 # ==============================================================
 class AI_Inputs:
-    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData=None, targets = {"Empty","Empty","Empty"}):
+    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData=None, targets = ["Empty","Empty","Empty","Empty"]):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.frame_width = frame_width

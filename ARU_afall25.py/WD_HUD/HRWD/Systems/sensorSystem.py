@@ -3,6 +3,12 @@ class sensorSystem:
         self.ser = ser
         self.data = {}
 
+
+
+#called in line 110 of universal main this pulls all the data from the microcontroller
+#im thinking of adding a a line that forgo this piece of code in order to function without controllelr
+
+
     def readSensors(self):
         while self.ser.in_waiting > 0:
             try:

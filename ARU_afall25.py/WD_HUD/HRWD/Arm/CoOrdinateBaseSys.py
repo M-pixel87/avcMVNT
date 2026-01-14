@@ -1,3 +1,8 @@
+#this jist of this file is that it imports the arm libs as well as some math, timem, and randomness libs
+# then a roarm var is set with how to open the port as well as clamp function class with 
+# a comparision of when a value is passed in to make sure that that value is with in my min max values found in 
+
+
 from roarm_sdk.roarm import roarm
 import math
 import time

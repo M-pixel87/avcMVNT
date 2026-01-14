@@ -41,7 +41,7 @@ class AI:
 # Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='/home/uafsmm/Desktop/JETSON_ORIN_SETUP/E_YOLO-Inference/runs/detect/Testmodle/weights/best.engine', conf_threshold=0.5):
+    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/testMM/weights/best.engine', conf_threshold=0.5):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
@@ -88,6 +88,7 @@ class AI_YOLO:
 
                 # Append detection info
                 detections.append({
+                    "class_id": cls_id,
                     "label": label,
                     "confidence": conf,
                     "bbox": (int(x1), int(y1), int(x2), int(y2)),
@@ -360,7 +361,7 @@ class XboxController:
 # FIXED AI INPUTS CLASS (With String-to-Float Safety)
 # ==============================================================
 class AI_Inputs:
-    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData=None, targets = {"Empty","Empty","Empty"}):
+    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData=None, targets = ["Empty","Empty","Empty","Empty"]):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.frame_width = frame_width
