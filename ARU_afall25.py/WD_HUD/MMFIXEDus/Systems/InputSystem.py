@@ -41,7 +41,7 @@ class AI:
 # Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/testMM/weights/best.engine', conf_threshold=0.5):
+    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine', conf_threshold=0.5):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
