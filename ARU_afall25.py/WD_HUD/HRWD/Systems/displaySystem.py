@@ -10,15 +10,15 @@ from Systems.mode_State import modeState
 
 
 class DisplaySystem:
-    def __init__(self, cam, mode="GPU"):
+    def __init__(self, cam, name = "VIDEO", mode ="GPU"):
         self.mode = mode
 
         if self.mode == "GPU" and cam:
             self._impl = GPUDisplaySystem()
-        elif self.mode == "TK" or cam is None:
+        elif self.mode == "TK" and cam is None:
             self._impl = TkDisplaySystem()
         elif self.mode == "YOLO" :
-            self._impl = DisplaySystem_YOLO()
+            self._impl = DisplaySystem_YOLO(window_name = name)
         else:
             raise ValueError(f"Unknown or unsupported display mode: {mode}")
 
@@ -48,7 +48,7 @@ class DisplaySystem_YOLO:
         self.prev_time = time.time()
         self.fps = 0.0
 
-    def update_display(self, frame, detections=None, axes=None, buttons=None, motor_output=None, data=None, state: modeState = None):
+    def update_display(self, frame = None, detections=None, axes=None, buttons=None, motor_output=None, data=None, state: modeState = None):
         if frame is None:
             return
 
@@ -95,7 +95,7 @@ class DisplaySystem_YOLO:
                 cv2.putText(frame, f"{key}: {value}", (10, y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 y += 20
-        if state.mode is not None:
+        if state and state.mode is not None:
                 cv2.putText(frame, f"{'AI' if state.mode == True else 'MANUAL'}", (250, 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 255, 50), 2)
                 

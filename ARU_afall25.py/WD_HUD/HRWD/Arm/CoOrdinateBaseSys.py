@@ -118,19 +118,28 @@ def move_joint(joint_index, angle, speed=450, acc=250):
     roarm.joints_angle_ctrl(angles, speed, acc)
     return True
 
-#Method to move arm position using ik to xyz
+# Method to move arm position using ik to xyz
 def move_arm_to(x, y, z, speed=300, acc=250):
     arm1 = 10
     arm2 = 14
     max_reach = arm1 + arm2
-
-    # Distance from base to target (ignoring vertical offset of base joint)
+    
+    # Distance from base to target
     distance = math.sqrt(x**2 + y**2 + z**2)
 
+    # --- CLAMPING LOGIC ---
     if distance > max_reach:
-        print(f"⚠️ Target ({x:.2f}, {y:.2f}, {z:.2f}) is out of reach! (dist={distance:.2f}, max={max_reach})")
-        return False  # don’t move
+        # Calculate how much we need to shrink the reach
+        scale = max_reach / distance 
+        
+        print(f"⚠️ Target out of reach ({distance:.2f}). Clamping to {max_reach}.")
+        
+        # Apply scaling to coordinates to pull them to the edge of the sphere
+        x = x * scale
+        y = y * scale
+        z = z * scale
 
+    # Now (x, y, z) is guaranteed to be within reach
     ik(x, y, z, angles, 0)
     roarm.joints_angle_ctrl(angles, speed, acc)
-    return True  # success
+    return True

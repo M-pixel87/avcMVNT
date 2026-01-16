@@ -10,12 +10,12 @@ from Systems.mode_State import modeState
 
 
 class DisplaySystem:
-    def __init__(self, cam, mode="GPU"):
+    def __init__(self, cam = None, mode="GPU"):
         self.mode = mode
 
         if self.mode == "GPU" and cam:
             self._impl = GPUDisplaySystem()
-        elif self.mode == "TK" or cam is None:
+        elif self.mode == "TK" and cam is None:
             self._impl = TkDisplaySystem()
         elif self.mode == "YOLO" :
             self._impl = DisplaySystem_YOLO()
