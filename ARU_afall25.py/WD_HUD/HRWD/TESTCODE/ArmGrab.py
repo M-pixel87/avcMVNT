@@ -4,17 +4,17 @@ from Systems.InputSystem import cvWebcam
 from Systems.displaySystem import DisplaySystem
 import time
 
-arm = Arm.CoOrdinateBaseSys()
+#arm = Arm.CoOrdinateBaseSys()
 infer = AI_YOLO(conf_threshold=0.3)
 cam = cvWebcam(cam_id=0, width=640, height=480)
 display = DisplaySystem(cam=cam, mode="YOLO")
 
-targetId = "blue_ball"  # Change this to the desired target object label
+targetId = "red_ball"  # Change this to the desired target object label
 
 def test_arm_grab():
     while(True):
         frame = cam.get_frame()
-        detections = infer.run_inference(frame)
+        detections = infer.detect(frame)
 
         for det in detections:
             if det["label"] == targetId:
@@ -27,14 +27,21 @@ def test_arm_grab():
                 world_z = 10.0  # Fixed height for simplicity
 
                 angles = [0, 0, 90, 0, 0, 0]
-                ik_angles = arm.ik(world_x, world_y, world_z, angles, error=0.5)
+                ik_angles = Arm.ik(world_x, world_y, world_z, angles, error=0.5)
 
-                arm.move_to_angles(ik_angles)
+                print(world_x)
+                print(world_y)
+                print(world_z)
 
-        display.update_display(frame=frame, detections=detections)
-        time.sleep(0.1)
+                Arm.move_to_angles(ik_angles)
+
+        display.update_display(img=frame, detections=detections)
+        time.sleep(0.01)
 
 
 def main():
     test_arm_grab()
+
+if __name__ == "__main__":
+    main()
 
