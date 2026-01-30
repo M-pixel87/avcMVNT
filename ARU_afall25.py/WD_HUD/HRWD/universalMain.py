@@ -1,5 +1,5 @@
 # --- IMPORTS ---
-from Systems.InputSystem import XboxController, cvWebcam, AI_YOLO, AI_Inputs
+from Systems.InputSystem import XboxController, cvWebcam, AI_YOLO, AI_Inputs, intelCamera
 from Systems.motorSystem import CytronMotor
 from Systems.sensorSystem import sensorSystem
 from Systems.displaySystem import DisplaySystem
@@ -11,8 +11,9 @@ import time
 import serial
 from itertools import permutations
 
-# --- GLOBAL STATE INIT ---
+# --- GLOBAL Variables ---
 inputState = modeState()
+
 
 
 class MockSerial:
@@ -53,7 +54,8 @@ pygame.init()
 pygame.joystick.init()
 
 controller = XboxController(state=inputState)
-cam = cvWebcam(cam_id=0, width=640, height=480)
+cam = cvWebcam(cam_id=0, width=320, height=240)
+cam2 = intelCamera(width = 424, height = 240)
 infer = AI_YOLO(conf_threshold=0.3)
 
 # Pass the 'ser' object (real or mock) to the systems
@@ -61,6 +63,7 @@ motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
 sensors = sensorSystem(ser)
 
 display = DisplaySystem(cam.camera, mode="YOLO")
+display2 = DisplaySystem(cam = cam2 ,name = "CAM2", mode="YOLO")
 ai_Inputs = AI_Inputs(frame_width=cam.width, frame_height=cam.height, state=inputState)
 
 # --- TIMING VARIABLES ---
@@ -119,7 +122,8 @@ def inputDisplay():
     # 3. VISION INFERENCE
     img = cam.get_frame()       
     detections = infer.detect(img)
-
+    depthImg2, img2 = cam2.get_frames()
+    detections2 = infer.detect(img2)
 
     if controller.connected and not inputState.mode:
         # --- MANUAL MODE ---
@@ -128,10 +132,8 @@ def inputDisplay():
     
     else:
         # --- AI MODE ---
-        if detections:
-            ai_Inputs.update_target(detections[0])
-        else:
-            ai_Inputs.driving = False
+        ai_Inputs.update_target(detections2, depthImg2)
+        ai_Inputs.driving = False
         ai_data = ai_Inputs.move_command()
         
         active_Cmd = {"L": ai_data["L"], "R": ai_data["R"]}
@@ -140,14 +142,15 @@ def inputDisplay():
 
     # Draw the camera feed, bounding boxes, joystick status, and motor values to the screen.
     display.update_display(
-        img,
-        detections,
+        img2,
+        detections2,
         controller.get_axes(),
         ctrl_data["buttons"],
         (active_Cmd["L"], active_Cmd["R"]),
         data,
         inputState
     )
+    display2.update_display(img=img, detections=detections)
 
 if __name__ == "__main__":
     main()

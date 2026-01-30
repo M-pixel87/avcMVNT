@@ -10,6 +10,7 @@ import pygame
 from Arm import CoOrdinateBaseSys as Arm
 from Systems.mode_State import modeState
 import pyrealsense2 as rs
+import threading
 
 # Headless mode setup
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -120,90 +121,101 @@ class intelCamera:
         self.width = width
         self.height = height
         self.fps = fps
+        self.stopped = False
+        self.frame_data = (None, None) # (depth, color)
 
-        # Configure depth and color streams
+        # Configure stream
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
         self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
-
+        
         # Start streaming
-        self.pipeline.start(self.config)
-        print(f"✅ Intel RealSense camera initialized [{width}x{height} @ {fps} FPS]")
+        self.profile = self.pipeline.start(self.config)
+        print(f"✅ Intel RealSense initialized [{width}x{height} @ {fps} FPS]")
+
+        # Start the capture thread
+        self.thread = threading.Thread(target=self.update, args=())
+        self.thread.daemon = True
+        self.thread.start()
+
+    def update(self):
+        """Background thread to constantly fetch the newest frame"""
+        while not self.stopped:
+            try:
+                frames = self.pipeline.wait_for_frames()
+                depth_frame = frames.get_depth_frame()
+                color_frame = frames.get_color_frame()
+                
+                if depth_frame and color_frame:
+                    d_img = np.asanyarray(depth_frame.get_data())
+                    c_img = np.asanyarray(color_frame.get_data())
+                    self.frame_data = (d_img, c_img)
+            except Exception as e:
+                print(f"Intel Cam Error: {e}")
 
     def get_frames(self):
-        frames = self.pipeline.wait_for_frames()
-        depth_frame = frames.get_depth_frame()
-        color_frame = frames.get_color_frame()
-
-        if not depth_frame or not color_frame:
-            return None, None
-
-        depth_image = np.asanyarray(depth_frame.get_data())
-        color_image = np.asanyarray(color_frame.get_data())
-
-        return depth_image, color_image
+        """Returns the most recent frame instantly"""
+        return self.frame_data
 
     def release(self):
+        self.stopped = True
+        self.thread.join()
         self.pipeline.stop()
-        print("Intel RealSense camera released.")
+        print("Intel RealSense released.")
 
 
 
 
 class cvWebcam:
-    def __init__(self, cam_id=0, width=640, height=480):
+    def __init__(self, cam_id=0, width=640, height=480, fps=30):
         self.cam_id = cam_id
         self.width = width
         self.height = height
-        self.camera = None
-        self.initialized = False
+        self.stopped = False
+        self.grabbed = False
+        self.frame = None
 
-        try:
-            path = f"/dev/video{cam_id}"
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"No device found at {path}")
+        path = f"/dev/video{cam_id}"
+        # Force V4L2 for Jetson
+        self.camera = cv2.VideoCapture(cam_id, cv2.CAP_V4L2)
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.camera.set(cv2.CAP_PROP_FPS, fps)
+        
+        # Buffer size 1 ensures we always get the *newest* frame, not an old buffered one
+        self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-            # 1. Force V4L2 (Correct for Jetson)
-            self.camera = cv2.VideoCapture(cam_id, cv2.CAP_V4L2)
-
-            # 2. DO NOT set FOURCC to MJPG. 
-            # Your camera only has YUYV, so we let it use the default.
+        if self.camera.isOpened():
+            print(f"✅ cvWebcam threaded on {path}")
+            # Read one frame to ensure it works
+            self.grabbed, self.frame = self.camera.read()
             
-            # 3. Set Resolution (640x480 is safe for YUYV)
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            # Start thread
+            self.thread = threading.Thread(target=self.update, args=())
+            self.thread.daemon = True
+            self.thread.start()
+        else:
+            print(f"❌ Failed to open cvWebcam {cam_id}")
 
-            # 4. Set FPS to 30 (Safest for YUYV format)
-            # Your list says 60 is possible, but YUYV is heavy and often times out at 60.
-            self.camera.set(cv2.CAP_PROP_FPS, 30)
-
+    def update(self):
+        while not self.stopped:
             if not self.camera.isOpened():
-                raise RuntimeError(f"Failed to open camera {cam_id}")
-
-            print(f"✅ cvWebcam initialized on {path} [{width}x{height}]")
-            self.initialized = True
-
-        except Exception as e:
-            print(f"⚠️ cvWebcam init failed: {e}")
-            self.camera = None
+                break
+            # Grab frame (blocking only in this thread, not main)
+            grabbed, frame = self.camera.read()
+            if grabbed:
+                self.grabbed = grabbed
+                self.frame = frame
 
     def get_frame(self):
-        if not self.initialized or self.camera is None:
-            return None
-
-        ret, frame = self.camera.read()
-        if not ret:
-            print("⚠️ Frame capture failed.")
-            return None
-        return frame
+        return self.frame
 
     def release(self):
-        if self.camera:
-            self.camera.release()
-            self.initialized = False
-            print("🧹 cvWebcam released.")
-
+        self.stopped = True
+        self.thread.join()
+        self.camera.release()
+        print("cvWebcam released.")
 
 
 
@@ -413,7 +425,8 @@ class AI_Inputs:
         self.leftActive = True
         self.state = state
         self.sensorData = sensorData
-        self.mode = 1  # 0=Approach, 1 = stuck, 2=Grab
+        self.dist = 0
+        self.mode = 0  # 0=Approach, 1 = stuck, 2=Grab
 
         self.targets = targets
         self.count = 0
@@ -421,40 +434,89 @@ class AI_Inputs:
         # Params
         self.center_threshold = 50
         self.max_speed = 90
-        self.min_speed = 0
+        self.min_speed = 30
         self.turn_scale = 0.5
 
-    def update_target(self, detection):
-        if detection:
-            if(detection["class_id"] == self.targets[self.count]):
-                self.target_pos["x"] = detection["center"][0]
-                self.target_pos["y"] = detection["center"][1]
-                if detection["width"] < 150:
-                    self.driving = True
-                else:
-                    self.driving = False
-        else:
+    def update_target(self, detections, depth_image=None):
+        """
+        Scans detections for the target and uses RealSense depth for stopping.
+        """
+        # 1. Check if we have valid targets left
+        if self.count >= len(self.targets):
             self.driving = False
+            return
+
+        wanted_label = self.targets[self.count] 
+        found = False
+
+        if detections:
+            for det in detections:
+                if det["label"].lower() == wanted_label.lower():
+                    
+                    # Get center coordinates
+                    cx = int(det["center"][0])
+                    cy = int(det["center"][1])
+                    
+                    self.target_pos["x"] = cx
+                    self.target_pos["y"] = cy
+                    
+                    distance_mm = 0
+                    self.dist = distance_mm
+
+                    # Ensure we have a depth image and coords are safe
+                    if depth_image is not None:
+                        h, w = depth_image.shape
+                        if 0 <= cy < h and 0 <= cx < w:
+                            distance_mm = depth_image[cy, cx]
+                    self.driving = True
+                    found = True
+                    break 
+        if not found:
+            self.driving = False
+
 
     def move_command(self):
         left_speed = 0
         right_speed = 0
         
         # 1. VISUAL DRIVING
-        if self.driving and (self.mode == 0 ):
+        if self.driving and (self.mode == 0):
+            
+            # --- CALCULATE DYNAMIC SPEED ---
+            # Range: Slow down starting at 1500mm, stop slowing at 500mm
+            slow_start_dist = 1500 
+            stop_dist = 500        
+            
+            if self.distance_mm >= slow_start_dist:
+                # If we are far away, full throttle
+                forward_speed = self.max_speed
+                
+            elif self.distance_mm <= stop_dist:
+                # If we are very close, crawl at min speed
+                forward_speed = self.min_speed
+                
+            else:
+                ratio = (self.distance_mm - stop_dist) / (slow_start_dist - stop_dist)
+                forward_speed = self.min_speed + (ratio * (self.max_speed - self.min_speed))
+
+
+            # --- APPLY STEERING ---
             error = self.target_pos["x"] - (self.frame_width / 2)
             
+            # If error is small, just drive forward at our calculated speed
             if abs(error) < self.center_threshold:
-                left_speed = self.max_speed
-                right_speed = self.max_speed
+                left_speed = forward_speed
+                right_speed = forward_speed
             else:
                 turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
-                if error > 0: # Target Right
-                    left_speed = self.max_speed
-                    right_speed = self.max_speed * (1 - turn_amount)
-                else: # Target Left
-                    left_speed = self.max_speed * (1 + turn_amount)
-                    right_speed = self.max_speed
+                
+                if error > 0: # Target is Right
+                    left_speed = forward_speed
+                    right_speed = forward_speed * (1 - turn_amount)
+                else: # Target is Left
+                    left_speed = forward_speed * (1 + turn_amount)
+                    right_speed = forward_speed
+
 
         # 2. SENSOR STOP LOGIC (Overrides driving)
         if self.mode == 0 :

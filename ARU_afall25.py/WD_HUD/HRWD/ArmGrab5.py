@@ -12,9 +12,9 @@ display = DisplaySystem(cam = None , mode="YOLO")
 display2 = DisplaySystem(cam = cam ,name = "CAM2", mode="YOLO")
 
 targetId = "red_ball" 
-targetX = 10 # Safe forward distance
-targetY = 0
-targetZ = 10.0 
+targetX = 9.0 # Safe forward distance
+targetY = 0.0
+targetZ = 8.0
 dist = 0
 
 Arm.move_arm_to(targetX,targetY,targetZ)
@@ -76,7 +76,7 @@ def test_arm_grab():
                     dist = depth_frame.get_distance(x_center, y_center)
 
                     print(f"Ball is {dist:.3f} meters away")
-            
+            count2 = 0
             for det in detections2:
                 if det["label"] == targetId:
                     x_center = int((det["bbox"][0] + det["bbox"][2]) / 2)
@@ -93,9 +93,12 @@ def test_arm_grab():
                         target_found = False 
                     else:
                         print("CENTERED Y")
-                        target_found = True 
+                        count2 += 1
+                        if(count2 >= 50):
+                            target_found = True 
+                        
 
-                    if(target_found and dist != 0.000):
+                    if(target_found and dist != 0.000 ):
                         targetX = ((dist*3.3)*12) + 9 #places arm above target (hopefully)
 
                     if current_time - last_command_time > command_delay:

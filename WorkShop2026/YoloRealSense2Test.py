@@ -11,6 +11,7 @@ MODEL_PATH = '/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mounta
 CONFIDENCE_THRESHOLD = 0.5
 
 def main():
+    
     # 1. SETUP YOLO
     print(f"🔍 Loading YOLO model from: {MODEL_PATH}")
     try:
