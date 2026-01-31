@@ -54,8 +54,8 @@ pygame.init()
 pygame.joystick.init()
 
 controller = XboxController(state=inputState)
-cam = cvWebcam(cam_id=0, width=320, height=240)
-cam2 = intelCamera(width = 424, height = 240)
+cam = cvWebcam(cam_id=6, width=640, height=480)
+cam2 = intelCamera(width = 640, height = 480)
 infer = AI_YOLO(conf_threshold=0.3)
 
 # Pass the 'ser' object (real or mock) to the systems
@@ -74,7 +74,7 @@ frame_delay = 1.0 / max_fps
 
 # --- LOGIC CONFIGURATION ---
 # Define the possible colors the robot might look for.
-BASE_COLORS = ["Green", "Red", "Yellow", "Blue"]
+BASE_COLORS = ["green_ball", "red_ball", "yellow_ball", "blue_ball"]
 ALL_CASES = [list(p) for p in permutations(BASE_COLORS)]
 
 CMD_TO_CASE_MAP = {
@@ -133,7 +133,7 @@ def inputDisplay():
     else:
         # --- AI MODE ---
         ai_Inputs.update_target(detections2, depthImg2)
-        ai_Inputs.driving = False
+        #ai_Inputs.driving = False
         ai_data = ai_Inputs.move_command()
         
         active_Cmd = {"L": ai_data["L"], "R": ai_data["R"]}

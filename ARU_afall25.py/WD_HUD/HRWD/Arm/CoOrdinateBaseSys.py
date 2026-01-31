@@ -9,7 +9,7 @@ import random
 # https://github.com/waveshareteam/waveshare_roarm_sdk/tree/main
 
 # Serial communication example
-roarm = roarm(roarm_type="roarm_m3", port="/dev/ttyUSB0", baudrate=115200)
+roarm = roarm(roarm_type="roarm_m3", port="/dev/ttyUSB1", baudrate=115200)
 
 # Http communication example
 # Note: HTTP communication needs to be connected to the same wifi first, and host is the IP address of the robotic arm.
@@ -119,25 +119,42 @@ def move_joint(joint_index, angle, speed=450, acc=250):
     return True
 
 # Method to move arm position using ik to xyz
+# In Arm.py
+
 def move_arm_to(x, y, z, speed=300, acc=250):
     arm1 = 10
     arm2 = 14
     max_reach = arm1 + arm2
     
-    # Distance from base to target
-    distance = math.sqrt(x**2 + y**2 + z**2)
+    # --- NEW CLAMPING LOGIC (Preserves Height) ---
+    
+    # 1. First, ensure Z is physically possible. 
+    # (Cannot be higher than the total length of the arm)
+    if abs(z) > max_reach:
+        z = max_reach if z > 0 else -max_reach
+        x = 0
+        y = 0
+        print(f"⚠️ Height {z} is impossible. Clamping to vertical limit.")
 
-    # --- CLAMPING LOGIC ---
-    if distance > max_reach:
-        # Calculate how much we need to shrink the reach
-        scale = max_reach / distance 
+    # 2. Calculate the maximum horizontal reach available AT THIS HEIGHT
+    # Think of a triangle: MaxReach is hypotenuse, Z is one side.
+    # horizontal_reach^2 + z^2 = max_reach^2
+    max_horizontal_reach = math.sqrt(max_reach**2 - z**2)
+    
+    # 3. Calculate current horizontal distance
+    current_horizontal_dist = math.sqrt(x**2 + y**2)
+    
+    # 4. If X/Y are too far, scale them back but KEEP Z THE SAME
+    if current_horizontal_dist > max_horizontal_reach:
+        scale = max_horizontal_reach / current_horizontal_dist
         
-        print(f"⚠️ Target out of reach ({distance:.2f}). Clamping to {max_reach}.")
+        print(f"⚠️ Target out of reach at height {z}. Clamping horizontal range.")
         
-        # Apply scaling to coordinates to pull them to the edge of the sphere
         x = x * scale
         y = y * scale
-        z = z * scale
+        # Z is NOT touched here!
+        
+    # ---------------------------------------------
 
     # Now (x, y, z) is guaranteed to be within reach
     ik(x, y, z, angles, 0)

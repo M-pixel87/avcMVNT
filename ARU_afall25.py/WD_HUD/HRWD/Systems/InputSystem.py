@@ -425,6 +425,7 @@ class AI_Inputs:
         self.leftActive = True
         self.state = state
         self.sensorData = sensorData
+        self.distance_mm = 0
         self.dist = 0
         self.mode = 0  # 0=Approach, 1 = stuck, 2=Grab
 
@@ -461,13 +462,15 @@ class AI_Inputs:
                     self.target_pos["y"] = cy
                     
                     distance_mm = 0
-                    self.dist = distance_mm
 
                     # Ensure we have a depth image and coords are safe
                     if depth_image is not None:
                         h, w = depth_image.shape
                         if 0 <= cy < h and 0 <= cx < w:
-                            distance_mm = depth_image[cy, cx]
+                            self.distance_mm = depth_image[cy, cx]
+                            if(self.distance_mm == 0) : self.distance_mm = 750
+                            self.dist = distance_mm
+                            print(self.dist)
                     self.driving = True
                     found = True
                     break 
@@ -494,6 +497,7 @@ class AI_Inputs:
             elif self.distance_mm <= stop_dist:
                 # If we are very close, crawl at min speed
                 forward_speed = self.min_speed
+                self.mode = 1
                 
             else:
                 ratio = (self.distance_mm - stop_dist) / (slow_start_dist - stop_dist)
@@ -519,7 +523,7 @@ class AI_Inputs:
 
 
         # 2. SENSOR STOP LOGIC (Overrides driving)
-        if self.mode == 0 :
+        if self.mode == 1 :
             # FIX: Get raw value, then FORCE convert to float
             r_raw = self.sensorData.get("RightUNO", 999) if self.sensorData else 999
             l_raw = self.sensorData.get("LeftUNO", 999) if self.sensorData else 999
@@ -556,10 +560,10 @@ class AI_Inputs:
 
 
         # 3. APPLY OUTPUT
-        if not self.leftActive: left_speed = 0
+        if not self.leftActive or not self.driving: left_speed = 0
         else: left_speed = max(self.min_speed, min(left_speed, self.max_speed)) * -1
 
-        if not self.rightActive: right_speed = 0
+        if not self.rightActive or not self.driving: right_speed = 0
         else: right_speed = max(self.min_speed, min(right_speed, self.max_speed)) * -1
 
         self.data = {"L": int(left_speed), "R": int(right_speed)}
