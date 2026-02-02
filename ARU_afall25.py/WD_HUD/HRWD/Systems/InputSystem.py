@@ -413,8 +413,11 @@ class XboxController:
 # ==============================================================
 # FIXED AI INPUTS CLASS (With String-to-Float Safety)
 # ==============================================================
+from Arm import CoOrdinateBaseSys as Arm
+import time
+
 class AI_Inputs:
-    def __init__(self, state: modeState, frame_width=640, frame_height=480, sensorData=None, targets = ["Empty","Empty","Empty","Empty"]):
+    def __init__(self, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.frame_width = frame_width
@@ -426,57 +429,171 @@ class AI_Inputs:
         self.state = state
         self.sensorData = sensorData
         self.distance_mm = 0
-        self.dist = 0
-        self.mode = 0  # 0=Approach, 1 = stuck, 2=Grab
+        self.dist = 0 # This will be the RealSense meters value
+        self.mode = 0  # 0=Approach, 1=Stuck/Sensors, 2=Grab
+
+        # --- ARM CONFIGURATION ---
+        self.SAFE_HEIGHT = 8.0   
+        self.GRAB_HEIGHT = -2.0  
+        self.JAW_OPEN = 70
+        self.JAW_CLOSED = 10     
+
+        # --- ARM STATE VARIABLES ---
+        self.targetX = 9.0 
+        self.targetY = 0.0
+        self.targetZ = self.SAFE_HEIGHT
+        self.targetJawAngle = self.JAW_OPEN
+        
+        self.grab_state = 0
+        self.state_timer = 0
+        self.last_command_time = 0
+        self.command_delay = 0.1 
+        self.center_counter = 0 
+        self.y_aligned = False 
+        self.ball_grabbed = False
 
         self.targets = targets
         self.count = 0
         
-        # Params
+        # Drive Params
         self.center_threshold = 50
         self.max_speed = 90
         self.min_speed = 30
         self.turn_scale = 0.5
 
-    def update_target(self, detections, depth_image=None):
+    def update_target(self, detections, depth_frame=None):
         """
-        Scans detections for the target and uses RealSense depth for stopping.
+        Updates target tracking. 
+        detections: from Realsense
+        depth_frame: the actual depth frame object (to use get_distance)
         """
-        # 1. Check if we have valid targets left
         if self.count >= len(self.targets):
             self.driving = False
             return
+            
+        if(ball_grabbed == False):
+            wanted_label = self.targets[self.count]
+        else:
+            wanted_label = (self.targets[self.count].split("_"))[0] + "_bucket"
 
-        wanted_label = self.targets[self.count] 
+
         found = False
 
         if detections:
             for det in detections:
                 if det["label"].lower() == wanted_label.lower():
-                    
-                    # Get center coordinates
-                    cx = int(det["center"][0])
-                    cy = int(det["center"][1])
+                    # Calculate center
+                    cx = int((det["bbox"][0] + det["bbox"][2]) / 2)
+                    cy = int((det["bbox"][1] + det["bbox"][3]) / 2)
                     
                     self.target_pos["x"] = cx
                     self.target_pos["y"] = cy
-                    
-                    distance_mm = 0
 
-                    # Ensure we have a depth image and coords are safe
-                    if depth_image is not None:
-                        h, w = depth_image.shape
-                        if 0 <= cy < h and 0 <= cx < w:
-                            self.distance_mm = depth_image[cy, cx]
-                            if(self.distance_mm == 0) : self.distance_mm = 750
-                            self.dist = distance_mm
-                            print(self.dist)
+                    if depth_frame is not None:
+                        # Use get_distance for meters (matches your original dist logic)
+                        d_val = depth_frame.get_distance(cx, cy)
+                        if d_val > 0:
+                            self.dist = d_val
+                            self.distance_mm = d_val * 1000 # Keep both units
+                        
                     self.driving = True
                     found = True
                     break 
+        
         if not found:
             self.driving = False
 
+    def update_arm_logic(self, webcam_detections):
+        """
+        The logic from your original test_arm_grab loop, converted for the class.
+        Pass in detections from the SECOND (webcam) camera here.
+        """
+        current_time = time.time()
+        wanted_label = self.targets[self.count]
+
+        # --- 1. Y-CENTERING (Webcam Logic) ---
+        if self.mode == 2 and self.grab_state == 0:
+            webcam_sees_target = False
+            centered_this_frame = False
+            
+            for det in webcam_detections:
+                if det["label"].lower() == wanted_label.lower():
+                    webcam_sees_target = True
+                    # Calculate center from bounding box
+                    x_c = int((det["bbox"][0] + det["bbox"][2]) / 2)
+                    
+                    if x_c <= 280:
+                        self.targetY += 0.25
+                        self.center_counter = 0
+                        self.y_aligned = False 
+                    elif x_c >= 360:
+                        self.targetY -= 0.25
+                        self.center_counter = 0
+                        self.y_aligned = False
+                    else:
+                        centered_this_frame = True
+            
+            if webcam_sees_target:
+                if centered_this_frame:
+                    self.center_counter += 1
+                else:
+                    self.center_counter = 0
+
+            if self.center_counter >= 20:
+                self.y_aligned = True
+
+        # --- 2. ARM STATE MACHINE ---
+        if self.mode == 2:
+            # STATE 0: SEARCH & CENTER
+            if self.grab_state == 0:
+                self.targetZ = self.SAFE_HEIGHT
+                self.targetJawAngle = self.JAW_OPEN
+                
+                if self.y_aligned and self.dist > 0:
+                    print(f"LOCKED ON -> REACHING (Dist: {self.dist:.3f}m)")
+                    self.targetX = ((self.dist * 3.3) * 12) + 9 
+                    self.grab_state = 1
+                    self.state_timer = current_time
+
+            # STATE 1: REACH
+            elif self.grab_state == 1:
+                if current_time - self.state_timer > 2.0:
+                    self.grab_state = 2
+                    self.state_timer = current_time
+            
+            # STATE 2: LOWER
+            elif self.grab_state == 2:
+                self.targetZ = self.GRAB_HEIGHT
+                if current_time - self.state_timer > 2.0:
+                    self.grab_state = 3
+                    self.state_timer = current_time
+
+            # STATE 3: GRAB
+            elif self.grab_state == 3:
+                self.targetJawAngle = self.JAW_CLOSED
+                if current_time - self.state_timer > 3.0:
+                    self.grab_state = 4
+                    self.state_timer = current_time
+
+            # STATE 4: LIFT & RESET
+            elif self.grab_state == 4:
+                self.targetZ = self.SAFE_HEIGHT
+                self.targetX = 9.0 
+                if current_time - self.state_timer > 2.0:
+                    print("RESETTING FOR NEXT TARGET")
+                    self.grab_state = 0
+                    self.center_counter = 0
+                    self.y_aligned = False 
+                    self.dist = 0
+                    self.count += 1 # Move to next target in list
+                    self.mode = 0   # Go back to driving mode
+                    self.ball_grabbed = True
+
+            # --- 3. SEND COMMANDS ---
+            if current_time - self.last_command_time > self.command_delay:
+                Arm.move_joint(5, self.targetJawAngle)
+                Arm.move_arm_to(self.targetX, self.targetY, self.targetZ)
+                self.last_command_time = current_time
 
     def move_command(self):
         left_speed = 0
@@ -484,87 +601,58 @@ class AI_Inputs:
         
         # 1. VISUAL DRIVING
         if self.driving and (self.mode == 0):
-            
-            # --- CALCULATE DYNAMIC SPEED ---
-            # Range: Slow down starting at 1500mm, stop slowing at 500mm
             slow_start_dist = 1500 
             stop_dist = 500        
             
             if self.distance_mm >= slow_start_dist:
-                # If we are far away, full throttle
                 forward_speed = self.max_speed
-                
             elif self.distance_mm <= stop_dist:
-                # If we are very close, crawl at min speed
                 forward_speed = self.min_speed
-                self.mode = 1
-                
+                self.mode = 1 # Shift to sensor precision mode
             else:
                 ratio = (self.distance_mm - stop_dist) / (slow_start_dist - stop_dist)
                 forward_speed = self.min_speed + (ratio * (self.max_speed - self.min_speed))
 
-
-            # --- APPLY STEERING ---
             error = self.target_pos["x"] - (self.frame_width / 2)
-            
-            # If error is small, just drive forward at our calculated speed
             if abs(error) < self.center_threshold:
                 left_speed = forward_speed
                 right_speed = forward_speed
             else:
                 turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
-                
-                if error > 0: # Target is Right
+                if error > 0: 
                     left_speed = forward_speed
                     right_speed = forward_speed * (1 - turn_amount)
-                else: # Target is Left
+                else:
                     left_speed = forward_speed * (1 + turn_amount)
                     right_speed = forward_speed
 
-
-        # 2. SENSOR STOP LOGIC (Overrides driving)
-        if self.mode == 1 :
-            # FIX: Get raw value, then FORCE convert to float
+        # 2. SENSOR STOP LOGIC
+        elif self.mode == 1:
             r_raw = self.sensorData.get("RightUNO", 999) if self.sensorData else 999
             l_raw = self.sensorData.get("LeftUNO", 999) if self.sensorData else 999
-
             try:
                 r_dist = float(r_raw)
-            except (ValueError, TypeError):
-                r_dist = 999.0
-
-            try:
                 l_dist = float(l_raw)
-            except (ValueError, TypeError):
-                l_dist = 999.0
+            except:
+                r_dist, l_dist = 999.0, 999.0
 
-            # Debug print to confirm it is working now
-            # print(f"Dist: L={l_dist} R={r_dist}")
-
-            if r_dist <= 50:
-                self.rightActive = False  
+            if r_dist <= 50: self.rightActive = False  
+            if l_dist <= 50: self.leftActive = False   
             
-            if l_dist <= 50:
-                self.leftActive = False   
-            
-            # If both stopped, switch mode
             if not self.rightActive and not self.leftActive:
-                print("🛑 TARGET REACHED -> Switching to Mode 2")
                 self.mode = 2
                 self.driving = False
-                
-        #ARM CONTROL MODE
-        if self.mode == 2:
-            left_speed = 0
-            right_speed = 0
-
 
         # 3. APPLY OUTPUT
-        if not self.leftActive or not self.driving: left_speed = 0
-        else: left_speed = max(self.min_speed, min(left_speed, self.max_speed)) * -1
+        if not self.leftActive or not self.driving or self.mode == 2: 
+            left_speed = 0
+        else: 
+            left_speed = max(self.min_speed, min(left_speed, self.max_speed)) * -1
 
-        if not self.rightActive or not self.driving: right_speed = 0
-        else: right_speed = max(self.min_speed, min(right_speed, self.max_speed)) * -1
+        if not self.rightActive or not self.driving or self.mode == 2: 
+            right_speed = 0
+        else: 
+            right_speed = max(self.min_speed, min(right_speed, self.max_speed)) * -1
 
         self.data = {"L": int(left_speed), "R": int(right_speed)}
         return self.data

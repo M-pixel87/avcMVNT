@@ -11,7 +11,7 @@ SAFE_HEIGHT = 8.0
 GRAB_HEIGHT = -2.0  
 JAW_OPEN = 70
 JAW_CLOSED = 10     
-
+ 
 infer = AI_YOLO(conf_threshold=0.3)
 cam = cvWebcam(cam_id=6, width=640, height=480)
 display = DisplaySystem(cam = None , mode="YOLO") 

@@ -9,7 +9,7 @@ import random
 # https://github.com/waveshareteam/waveshare_roarm_sdk/tree/main
 
 # Serial communication example
-roarm = roarm(roarm_type="roarm_m3", port="/dev/ttyUSB1", baudrate=115200)
+roarm = roarm(roarm_type="roarm_m3", port="/dev/ttyUSB0", baudrate=115200)
 
 # Http communication example
 # Note: HTTP communication needs to be connected to the same wifi first, and host is the IP address of the robotic arm.
