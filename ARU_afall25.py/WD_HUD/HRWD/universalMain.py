@@ -133,6 +133,7 @@ def inputDisplay():
     else:
         # --- AI MODE ---
         ai_Inputs.update_target(detections2, depthImg2)
+        ai_Inputs.update_target(detections2)
         #ai_Inputs.driving = False
         ai_data = ai_Inputs.move_command()
         

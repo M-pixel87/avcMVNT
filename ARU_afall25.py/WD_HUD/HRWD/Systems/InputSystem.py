@@ -471,7 +471,7 @@ class AI_Inputs:
             self.driving = False
             return
             
-        if(ball_grabbed == False):
+        if(self.ball_grabbed == False):
             wanted_label = self.targets[self.count]
         else:
             wanted_label = (self.targets[self.count].split("_"))[0] + "_bucket"
@@ -642,6 +642,8 @@ class AI_Inputs:
             if not self.rightActive and not self.leftActive:
                 self.mode = 2
                 self.driving = False
+        elif self.mode == 2:
+           self.driving = False
 
         # 3. APPLY OUTPUT
         if not self.leftActive or not self.driving or self.mode == 2: 
