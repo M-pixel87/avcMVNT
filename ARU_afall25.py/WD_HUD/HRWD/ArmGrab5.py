@@ -107,7 +107,7 @@ def test_arm_grab():
                 
                 # Logic Update:
                 # If the webcam sees it, update the counter based on centering.
-                if webcam_sees_target:
+                if webcam_sees_target and dist <= 4500:
                     if centered_this_frame:
                         center_counter += 1
                     else:
