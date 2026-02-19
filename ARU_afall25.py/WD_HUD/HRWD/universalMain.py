@@ -64,7 +64,7 @@ sensors = sensorSystem(ser)
 
 display = DisplaySystem(cam.camera, mode="YOLO")
 display2 = DisplaySystem(cam = cam2 ,name = "CAM2", mode="YOLO")
-ai_Inputs = AI_Inputs(frame_width=cam.width, frame_height=cam.height, state=inputState)
+ai_Inputs = AI_Inputs(motorSystem = motors, frame_width=cam.width, frame_height=cam.height, state=inputState)
 
 # --- TIMING VARIABLES ---
 max_fps = 60                   

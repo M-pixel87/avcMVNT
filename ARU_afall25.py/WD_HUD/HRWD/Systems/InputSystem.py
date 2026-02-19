@@ -417,12 +417,14 @@ from Arm import CoOrdinateBaseSys as Arm
 import time
 
 class AI_Inputs:
-    def __init__(self, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
+    def __init__(self, motorSystem, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.driving = False
+
+        self.motorSystem = motorSystem
         
         self.rightActive = True
         self.leftActive = True
@@ -434,10 +436,11 @@ class AI_Inputs:
 
         # --- ARM CONFIGURATION ---
         self.SAFE_HEIGHT = 8.0   
-        self.GRAB_HEIGHT = -2.0  
+        self.GRAB_HEIGHT = -2.0
+        self.DROP_HEIGHT = 10.0
         self.JAW_OPEN = 70
         self.JAW_CLOSED = 10
-        self.GRAB_OFFSET_Y = 0.0  # <--- ADJUST THIS: Positive = Shift Left, Negative = Shift Right
+        self.GRAB_OFFSET_Y = -1.25  # <--- ADJUST THIS: Positive = Shift Left, Negative = Shift Right
         self.GRAB_OFFSET_X = 0.0  # Optional: Adjust reach depth slightly     
 
         # --- ARM STATE VARIABLES ---
@@ -445,6 +448,7 @@ class AI_Inputs:
         self.targetY = 0.0
         self.targetZ = self.SAFE_HEIGHT
         self.targetJawAngle = self.JAW_OPEN
+        self.reverse_timer = 0  
         
         self.grab_state = 0
         self.state_timer = 0
@@ -551,7 +555,12 @@ class AI_Inputs:
             # STATE 0: SEARCH & CENTER
             if self.grab_state == 0:
                 self.targetZ = self.SAFE_HEIGHT
-                self.targetJawAngle = self.JAW_OPEN
+                
+                # If holding a ball, keep the jaw closed! Otherwise, open it to prepare for grab.
+                if self.ball_grabbed:
+                    self.targetJawAngle = self.JAW_CLOSED
+                else:
+                    self.targetJawAngle = self.JAW_OPEN
                 
                 if self.y_aligned and self.dist > 0:
                     print(f"LOCKED ON -> REACHING (Dist: {self.dist:.3f}m)")
@@ -565,16 +574,26 @@ class AI_Inputs:
                     self.grab_state = 2
                     self.state_timer = current_time
             
-            # STATE 2: LOWER
+            # STATE 2: LOWER (OR HOVER FOR BUCKET)
             elif self.grab_state == 2:
-                self.targetZ = self.GRAB_HEIGHT
+                # If doing a drop, stay high. If grabbing, go to the floor.
+                if self.ball_grabbed:
+                    self.targetZ = self.DROP_HEIGHT
+                else:
+                    self.targetZ = self.GRAB_HEIGHT
+                    
                 if current_time - self.state_timer > 2.0:
                     self.grab_state = 3
                     self.state_timer = current_time
 
-            # STATE 3: GRAB
+            # STATE 3: ACTUATE JAW
             elif self.grab_state == 3:
-                self.targetJawAngle = self.JAW_CLOSED
+                # If doing a drop, open the jaw. If grabbing, close it.
+                if self.ball_grabbed:
+                    self.targetJawAngle = self.JAW_OPEN
+                else:
+                    self.targetJawAngle = self.JAW_CLOSED
+                    
                 if current_time - self.state_timer > 3.0:
                     self.grab_state = 4
                     self.state_timer = current_time
@@ -584,15 +603,22 @@ class AI_Inputs:
                 self.targetZ = self.SAFE_HEIGHT
                 self.targetX = 9.0 
                 if current_time - self.state_timer > 2.0:
-                    print("RESETTING FOR NEXT TARGET")
                     self.grab_state = 0
                     self.center_counter = 0
                     self.y_aligned = False 
                     self.dist = 0
-                    #self.count += 1 # Move to next target in list
-                    #self.mode = 0   # Go back to driving mode
-                    self.ball_grabbed = False
                     
+                    # Go into reverse mode for both grab and drop
+                    self.mode = 3  
+                    self.reverse_timer = current_time
+                    
+                    if self.ball_grabbed:
+                        print("BALL DROPPED -> BACKING UP & SEEKING NEXT TARGET")
+                        self.ball_grabbed = False
+                        self.count += 1  # Move to the next color in the list!
+                    else:
+                        print("BALL GRABBED -> BACKING UP & SEEKING BUCKET")
+                        self.ball_grabbed = True
 
             # --- 3. SEND COMMANDS ---
             if current_time - self.last_command_time > self.command_delay:
@@ -608,6 +634,22 @@ class AI_Inputs:
     def move_command(self):
         left_speed = 0
         right_speed = 0
+
+        # --- REVERSE MODE (MODE 3) ---
+        if self.mode == 3:
+            # Check if 2 seconds have passed
+            if time.time() - self.reverse_timer < 2.0:
+                reverse_speed = 50 
+                self.data = {"L": reverse_speed, "R": reverse_speed}
+                return self.data
+            else:
+                # 2 seconds are up! Switch back to visual driving (hunting for bucket)
+                print("Finished backing up. Seeking bucket...")
+                self.mode = 0
+                self.driving = True
+                # Reset sensors so it doesn't immediately lock up
+                self.leftActive = True 
+                self.rightActive = True
         
         # 1. VISUAL DRIVING
         if self.driving and (self.mode == 0):
@@ -646,8 +688,8 @@ class AI_Inputs:
             except:
                 r_dist, l_dist = 999.0, 999.0
 
-            if r_dist <= 50: self.rightActive = False  
-            if l_dist <= 49: self.leftActive = False   
+            if r_dist <= 50 or self.distance_mm <= 250: self.leftActive = False  
+            if l_dist <= 49 or self.distance_mm <= 250: self.rightActive = False   
             
             if not self.rightActive and not self.leftActive:
                 self.mode = 2
