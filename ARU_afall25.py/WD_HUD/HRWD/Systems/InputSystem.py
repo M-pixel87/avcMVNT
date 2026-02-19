@@ -436,7 +436,9 @@ class AI_Inputs:
         self.SAFE_HEIGHT = 8.0   
         self.GRAB_HEIGHT = -2.0  
         self.JAW_OPEN = 70
-        self.JAW_CLOSED = 10     
+        self.JAW_CLOSED = 10
+        self.GRAB_OFFSET_Y = 0.0  # <--- ADJUST THIS: Positive = Shift Left, Negative = Shift Right
+        self.GRAB_OFFSET_X = 0.0  # Optional: Adjust reach depth slightly     
 
         # --- ARM STATE VARIABLES ---
         self.targetX = 9.0 
@@ -491,10 +493,12 @@ class AI_Inputs:
 
                     if depth_frame is not None:
                         # Use get_distance for meters (matches your original dist logic)
-                        d_val = depth_frame.get_distance(cx, cy)
+                        d_val = depth_frame[cy, cx] * 0.001
                         if d_val > 0:
                             self.dist = d_val
                             self.distance_mm = d_val * 1000 # Keep both units
+                        else:
+                            self.distance_mm = 5000
                         
                     self.driving = True
                     found = True
@@ -585,14 +589,20 @@ class AI_Inputs:
                     self.center_counter = 0
                     self.y_aligned = False 
                     self.dist = 0
-                    self.count += 1 # Move to next target in list
-                    self.mode = 0   # Go back to driving mode
-                    self.ball_grabbed = True
+                    #self.count += 1 # Move to next target in list
+                    #self.mode = 0   # Go back to driving mode
+                    self.ball_grabbed = False
+                    
 
             # --- 3. SEND COMMANDS ---
             if current_time - self.last_command_time > self.command_delay:
                 Arm.move_joint(5, self.targetJawAngle)
-                Arm.move_arm_to(self.targetX, self.targetY, self.targetZ)
+                
+                # APPLY THE OFFSETS HERE
+                final_x = self.targetX + self.GRAB_OFFSET_X
+                final_y = self.targetY + self.GRAB_OFFSET_Y
+                
+                Arm.move_arm_to(final_x, final_y, self.targetZ)
                 self.last_command_time = current_time
 
     def move_command(self):
@@ -637,7 +647,7 @@ class AI_Inputs:
                 r_dist, l_dist = 999.0, 999.0
 
             if r_dist <= 50: self.rightActive = False  
-            if l_dist <= 50: self.leftActive = False   
+            if l_dist <= 49: self.leftActive = False   
             
             if not self.rightActive and not self.leftActive:
                 self.mode = 2

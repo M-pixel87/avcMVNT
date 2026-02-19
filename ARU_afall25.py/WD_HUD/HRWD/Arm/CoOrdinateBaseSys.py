@@ -126,37 +126,25 @@ def move_arm_to(x, y, z, speed=300, acc=250):
     arm2 = 14
     max_reach = arm1 + arm2
     
-    # --- NEW CLAMPING LOGIC (Preserves Height) ---
-    
-    # 1. First, ensure Z is physically possible. 
-    # (Cannot be higher than the total length of the arm)
+    # 1. Check Z Height limits
     if abs(z) > max_reach:
-        z = max_reach if z > 0 else -max_reach
-        x = 0
-        y = 0
-        print(f"⚠️ Height {z} is impossible. Clamping to vertical limit.")
+        print(f"⚠️ Height {z} is impossible.")
+        return False
 
-    # 2. Calculate the maximum horizontal reach available AT THIS HEIGHT
-    # Think of a triangle: MaxReach is hypotenuse, Z is one side.
-    # horizontal_reach^2 + z^2 = max_reach^2
+    # 2. Calculate max horizontal reach at this specific height
+    # (Pythagorean theorem: Reach^2 + Height^2 = MaxArmLength^2)
     max_horizontal_reach = math.sqrt(max_reach**2 - z**2)
     
-    # 3. Calculate current horizontal distance
-    current_horizontal_dist = math.sqrt(x**2 + y**2)
+    # 3. Calculate how far we are trying to reach
+    target_dist = math.sqrt(x**2 + y**2)
     
-    # 4. If X/Y are too far, scale them back but KEEP Z THE SAME
-    if current_horizontal_dist > max_horizontal_reach:
-        scale = max_horizontal_reach / current_horizontal_dist
-        
-        print(f"⚠️ Target out of reach at height {z}. Clamping horizontal range.")
-        
-        x = x * scale
-        y = y * scale
-        # Z is NOT touched here!
-        
-    # ---------------------------------------------
+    # 4. STRICT LIMIT CHECK
+    # If the target is further than the arm can reach, DO NOT MOVE.
+    if target_dist > max_horizontal_reach:
+        print(f"⚠️ Target Unreachable! (Dist: {target_dist:.2f} > Max: {max_horizontal_reach:.2f})")
+        return False # Abort command, arm stays at last valid position
 
-    # Now (x, y, z) is guaranteed to be within reach
+    # 5. If we get here, the point is valid. Execute IK.
     ik(x, y, z, angles, 0)
     roarm.joints_angle_ctrl(angles, speed, acc)
     return True

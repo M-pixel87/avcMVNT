@@ -129,11 +129,14 @@ def inputDisplay():
         # --- MANUAL MODE ---
         ai_Inputs.driving = False # Tell AI to relax
         active_Cmd = {"L": ctrl_data["L"], "R": ctrl_data["R"]}
+        #print(active_Cmd)
     
     else:
         # --- AI MODE ---
         ai_Inputs.update_target(detections2, depthImg2)
-        ai_Inputs.update_target(detections2)
+        if(ai_Inputs.mode == 2):
+            ai_Inputs.update_arm_logic(detections)
+        #ai_Inputs.update_target(detections)
         #ai_Inputs.driving = False
         ai_data = ai_Inputs.move_command()
         
