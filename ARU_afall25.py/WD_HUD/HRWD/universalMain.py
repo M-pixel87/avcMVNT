@@ -83,6 +83,9 @@ CMD_TO_CASE_MAP = {
     "24": 2,  # Case 3
     #ect
 }
+time.sleep(2)
+motors.set_power(80, -80)
+time.sleep(1.75)
 
 # --- MAIN ENTRY POINT ---
 def main():

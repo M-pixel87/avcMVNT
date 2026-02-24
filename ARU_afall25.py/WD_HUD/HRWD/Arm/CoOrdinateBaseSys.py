@@ -28,6 +28,9 @@ def generate_random_xyz(x_range, y_range, z_range):
 
 
 angles = [0,0,90,0,0,0]
+current_x = 9.0  
+current_y = 0.0
+current_z = 8.0
 
 def ik(x, y, z, angles, error):  # angles = [theta1, theta2, theta3]
     errorI = error
@@ -122,6 +125,8 @@ def move_joint(joint_index, angle, speed=450, acc=250):
 # In Arm.py
 
 def move_arm_to(x, y, z, speed=300, acc=250):
+    global current_x, current_y, current_z
+    
     arm1 = 10
     arm2 = 14
     max_reach = arm1 + arm2
@@ -132,19 +137,46 @@ def move_arm_to(x, y, z, speed=300, acc=250):
         return False
 
     # 2. Calculate max horizontal reach at this specific height
-    # (Pythagorean theorem: Reach^2 + Height^2 = MaxArmLength^2)
     max_horizontal_reach = math.sqrt(max_reach**2 - z**2)
     
     # 3. Calculate how far we are trying to reach
     target_dist = math.sqrt(x**2 + y**2)
     
     # 4. STRICT LIMIT CHECK
-    # If the target is further than the arm can reach, DO NOT MOVE.
     if target_dist > max_horizontal_reach:
         print(f"⚠️ Target Unreachable! (Dist: {target_dist:.2f} > Max: {max_horizontal_reach:.2f})")
-        return False # Abort command, arm stays at last valid position
+        return False 
 
-    # 5. If we get here, the point is valid. Execute IK.
-    ik(x, y, z, angles, 0)
-    roarm.joints_angle_ctrl(angles, speed, acc)
+    # --- 5. CARTESIAN PATH GENERATION ---
+    # Calculate the total 3D distance of the movement
+    move_dist = math.sqrt((x - current_x)**2 + (y - current_y)**2 + (z - current_z)**2)
+    
+    # Define how many steps to take. (e.g., 2 steps per inch/unit of movement)
+    # We enforce a minimum of 1 step so very tiny movements still execute.
+    num_steps = max(1, int(move_dist * 2.0)) 
+    
+    # Loop through and generate each waypoint
+    for i in range(1, num_steps + 1):
+        fraction = i / num_steps
+        
+        # Calculate the intermediate (X, Y, Z) point along the straight line
+        inter_x = current_x + (x - current_x) * fraction
+        inter_y = current_y + (y - current_y) * fraction
+        inter_z = current_z + (z - current_z) * fraction
+        
+        # Run your existing IK on this tiny step
+        ik(inter_x, inter_y, inter_z, angles, 0)
+        
+        # Send the micro-movement to the arm
+        roarm.joints_angle_ctrl(angles, speed, acc)
+        
+        # Pause briefly to allow the physical servos to reach the waypoint
+        # before we overwrite the serial buffer with the next one.
+        time.sleep(0.02) 
+
+    # 6. Update our tracker to the final position
+    current_x = x
+    current_y = y
+    current_z = z
+    
     return True
