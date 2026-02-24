@@ -276,57 +276,6 @@ class Webcam:
             self.display.Close()
 
 # ==============================================================
-# ORIGINAL LEGACY WEBCAM CLASS (Jetson Utils)
-# ==============================================================
-class Webcam:
-    def __init__(self, cam_id=0, width=640, height=480):
-        self.cam_id = cam_id
-        self.width = width
-        self.height = height
-        self.camera = None
-        self.display = None
-
-        try:
-            self.display = jetson_utils.videoOutput(
-                "display://0",
-                argv=[f"--output-width={width}", f"--output-height={height}"]
-            )
-        except Exception as e:
-            print(f"⚠️ Display init failed: {e}")
-            self.display = None
-
-        try:
-            path = f"/dev/video{cam_id}"
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"No device at {path}")
-
-            self.camera = jetson_utils.videoSource(
-                path,
-                argv=[f"--input-width={width}", f"--input-height={height}"]
-            )
-            print(f"✅ Camera initialized on {path}")
-        except Exception as e:
-            print(f"⚠️ Camera init failed: {e}")
-            self.camera = None
-
-    def get_frame(self):
-        if self.camera is None:
-            return None
-        try:
-            return self.camera.Capture()
-        except Exception as e:
-            return None
-
-    def show_frame(self, img):
-        if self.display is not None and img is not None:
-            self.display.Render(img)
-            self.display.SetStatus("Webcam Stream")
-
-    def release(self):
-        if self.camera: self.camera.Close()
-        if self.display: self.display.Close()
-
-# ==============================================================
 # FIXED CONTROLLER CLASS
 # ==============================================================
 class XboxController:
@@ -408,10 +357,19 @@ class XboxController:
         return [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())] if self.connected else [0]
 
 # ==============================================================
-# FIXED AI INPUTS CLASS (With Sensor Logic)
+# FIXED AI INPUTS CLASS (With Fixed Bucket Drop & Protected States)
 # ==============================================================
+from Arm import CoOrdinateBaseSys as Arm
+import time
+
 # ==============================================================
-# FIXED AI INPUTS CLASS (With String-to-Float Safety)
+# FIXED AI INPUTS CLASS (With High-Carry & Close-Range Steering)
+# ==============================================================
+from Arm import CoOrdinateBaseSys as Arm
+import time
+
+# ==============================================================
+# FIXED AI INPUTS CLASS (With Ghost-Steering Fix)
 # ==============================================================
 from Arm import CoOrdinateBaseSys as Arm
 import time
@@ -430,18 +388,19 @@ class AI_Inputs:
         self.leftActive = True
         self.state = state
         self.sensorData = sensorData
-        self.distance_mm = 0
-        self.dist = 0 # This will be the RealSense meters value
-        self.mode = 0  # 0=Approach, 1=Stuck/Sensors, 2=Grab
+        self.distance_mm = 5000
+        self.dist = 5 # This will be the RealSense meters value
+        self.mode = 0  # 0=Approach, 1=Stuck/Sensors, 2=Grab, 3=Reverse, 4=Search
 
         # --- ARM CONFIGURATION ---
-        self.SAFE_HEIGHT = 8.0   
+        self.SAFE_HEIGHT = 8  
         self.GRAB_HEIGHT = -2.0
-        self.DROP_HEIGHT = 10.0
+        self.DROP_HEIGHT = 15
+        self.DROP_REACH_X = 12  
         self.JAW_OPEN = 70
         self.JAW_CLOSED = 10
-        self.GRAB_OFFSET_Y = -1.25  # <--- ADJUST THIS: Positive = Shift Left, Negative = Shift Right
-        self.GRAB_OFFSET_X = 0.0  # Optional: Adjust reach depth slightly     
+        self.GRAB_OFFSET_Y = 2.25
+        self.GRAB_OFFSET_X = 0.0      
 
         # --- ARM STATE VARIABLES ---
         self.targetX = 9.0 
@@ -457,24 +416,24 @@ class AI_Inputs:
         self.center_counter = 0 
         self.y_aligned = False 
         self.ball_grabbed = False
+        self.has_locked_target = False 
+        self.target_visible = False # <--- NEW: Tracks frame-by-frame visibility
 
         self.targets = targets
         self.count = 0
         
         # Drive Params
         self.center_threshold = 50
-        self.max_speed = 90
+        self.max_speed = 95
         self.min_speed = 30
         self.turn_scale = 0.5
 
+
     def update_target(self, detections, depth_frame=None):
-        """
-        Updates target tracking. 
-        detections: from Realsense
-        depth_frame: the actual depth frame object (to use get_distance)
-        """
         if self.count >= len(self.targets):
             self.driving = False
+            self.has_locked_target = False 
+            self.target_visible = False
             return
             
         if(self.ball_grabbed == False):
@@ -482,40 +441,62 @@ class AI_Inputs:
         else:
             wanted_label = (self.targets[self.count].split("_"))[0] + "_bucket"
 
+        # Do nothing if we haven't received a real voice command yet.
+        if wanted_label.lower() == "empty":
+            self.driving = False
+            self.has_locked_target = False
+            self.target_visible = False
+            self.mode = 0
+            return
 
         found = False
 
         if detections:
             for det in detections:
                 if det["label"].lower() == wanted_label.lower():
-                    # Calculate center
                     cx = int((det["bbox"][0] + det["bbox"][2]) / 2)
                     cy = int((det["bbox"][1] + det["bbox"][3]) / 2)
                     
                     self.target_pos["x"] = cx
                     self.target_pos["y"] = cy
-
-                    if depth_frame is not None:
-                        # Use get_distance for meters (matches your original dist logic)
-                        d_val = depth_frame[cy, cx] * 0.001
-                        if d_val > 0:
-                            self.dist = d_val
-                            self.distance_mm = d_val * 1000 # Keep both units
-                        else:
-                            self.distance_mm = 5000
                         
                     self.driving = True
                     found = True
-                    break 
+                    self.has_locked_target = True 
+                    
+                    if self.mode == 4 or self.mode == 1:
+                        print(f"👀 Target spotted! Tracking {wanted_label}...")
+                        self.mode = 0
+                    break
         
+        # --- NEW: Update instantaneous visibility ---
+        self.target_visible = found
+                    
+        # --- THE "LIDAR LOCK" ---
+        if self.driving and self.has_locked_target and depth_frame is not None:
+            cx = self.target_pos["x"]
+            cy = self.target_pos["y"]
+            
+            if 0 <= cy < self.frame_height and 0 <= cx < self.frame_width:
+                d_val = depth_frame[cy, cx] * 0.001
+                if d_val > 0.1: 
+                    self.dist = d_val
+                    self.distance_mm = d_val * 1000 
+        
+        # State-Machine Protection Layer
         if not found:
-            self.driving = False
+            if self.mode in [1, 2, 3]:
+                pass 
+            elif self.driving and self.distance_mm < 1200 and self.has_locked_target and self.mode == 0:
+                self.mode = 1
+                self.driving = True
+            else:
+                self.mode = 4
+                self.driving = True
+                self.has_locked_target = False
+
 
     def update_arm_logic(self, webcam_detections):
-        """
-        The logic from your original test_arm_grab loop, converted for the class.
-        Pass in detections from the SECOND (webcam) camera here.
-        """
         current_time = time.time()
         wanted_label = self.targets[self.count]
 
@@ -527,7 +508,6 @@ class AI_Inputs:
             for det in webcam_detections:
                 if det["label"].lower() == wanted_label.lower():
                     webcam_sees_target = True
-                    # Calculate center from bounding box
                     x_c = int((det["bbox"][0] + det["bbox"][2]) / 2)
                     
                     if x_c <= 280:
@@ -552,31 +532,30 @@ class AI_Inputs:
 
         # --- 2. ARM STATE MACHINE ---
         if self.mode == 2:
-            # STATE 0: SEARCH & CENTER
             if self.grab_state == 0:
-                self.targetZ = self.SAFE_HEIGHT
-                
-                # If holding a ball, keep the jaw closed! Otherwise, open it to prepare for grab.
                 if self.ball_grabbed:
+                    self.targetZ = self.DROP_HEIGHT 
                     self.targetJawAngle = self.JAW_CLOSED
-                else:
-                    self.targetJawAngle = self.JAW_OPEN
-                
-                if self.y_aligned and self.dist > 0:
-                    print(f"LOCKED ON -> REACHING (Dist: {self.dist:.3f}m)")
-                    self.targetX = ((self.dist * 3.3) * 12) + 9 
+                    self.y_aligned = True 
+                    print(f"LOCKED ON BUCKET -> PUNCHING FORWARD")
+                    self.targetX = self.DROP_REACH_X 
                     self.grab_state = 1
                     self.state_timer = current_time
+                else:
+                    self.targetZ = self.SAFE_HEIGHT 
+                    self.targetJawAngle = self.JAW_OPEN
+                    if self.y_aligned and self.dist > 0:
+                        print(f"LOCKED ON BALL -> REACHING (Dist: {self.dist:.3f}m)")
+                        self.targetX = ((self.dist * 3.3) * 12) + 9 
+                        self.grab_state = 1
+                        self.state_timer = current_time
 
-            # STATE 1: REACH
             elif self.grab_state == 1:
                 if current_time - self.state_timer > 2.0:
                     self.grab_state = 2
                     self.state_timer = current_time
             
-            # STATE 2: LOWER (OR HOVER FOR BUCKET)
             elif self.grab_state == 2:
-                # If doing a drop, stay high. If grabbing, go to the floor.
                 if self.ball_grabbed:
                     self.targetZ = self.DROP_HEIGHT
                 else:
@@ -586,36 +565,36 @@ class AI_Inputs:
                     self.grab_state = 3
                     self.state_timer = current_time
 
-            # STATE 3: ACTUATE JAW
             elif self.grab_state == 3:
-                # If doing a drop, open the jaw. If grabbing, close it.
                 if self.ball_grabbed:
-                    self.targetJawAngle = self.JAW_OPEN
+                    self.targetJawAngle = self.JAW_OPEN 
                 else:
-                    self.targetJawAngle = self.JAW_CLOSED
+                    self.targetJawAngle = self.JAW_CLOSED 
                     
                 if current_time - self.state_timer > 3.0:
                     self.grab_state = 4
                     self.state_timer = current_time
 
-            # STATE 4: LIFT & RESET
             elif self.grab_state == 4:
-                self.targetZ = self.SAFE_HEIGHT
+                if self.ball_grabbed:
+                    self.targetZ = self.SAFE_HEIGHT 
+                else:
+                    self.targetZ = self.DROP_HEIGHT 
                 self.targetX = 9.0 
+                
                 if current_time - self.state_timer > 2.0:
                     self.grab_state = 0
                     self.center_counter = 0
                     self.y_aligned = False 
                     self.dist = 0
                     
-                    # Go into reverse mode for both grab and drop
                     self.mode = 3  
                     self.reverse_timer = current_time
                     
                     if self.ball_grabbed:
                         print("BALL DROPPED -> BACKING UP & SEEKING NEXT TARGET")
                         self.ball_grabbed = False
-                        self.count += 1  # Move to the next color in the list!
+                        self.count += 1  
                     else:
                         print("BALL GRABBED -> BACKING UP & SEEKING BUCKET")
                         self.ball_grabbed = True
@@ -623,10 +602,12 @@ class AI_Inputs:
             # --- 3. SEND COMMANDS ---
             if current_time - self.last_command_time > self.command_delay:
                 Arm.move_joint(5, self.targetJawAngle)
-                
-                # APPLY THE OFFSETS HERE
-                final_x = self.targetX + self.GRAB_OFFSET_X
-                final_y = self.targetY + self.GRAB_OFFSET_Y
+                if self.grab_state > 0:
+                    final_x = self.targetX + self.GRAB_OFFSET_X
+                    final_y = self.targetY + self.GRAB_OFFSET_Y
+                else:
+                    final_x = self.targetX
+                    final_y = self.targetY
                 
                 Arm.move_arm_to(final_x, final_y, self.targetZ)
                 self.last_command_time = current_time
@@ -637,22 +618,25 @@ class AI_Inputs:
 
         # --- REVERSE MODE (MODE 3) ---
         if self.mode == 3:
-            # Check if 2 seconds have passed
-            if time.time() - self.reverse_timer < 2.0:
-                reverse_speed = 50 
+            if time.time() - self.reverse_timer < 3.0:
+                reverse_speed = 50  
                 self.data = {"L": reverse_speed, "R": reverse_speed}
                 return self.data
             else:
-                # 2 seconds are up! Switch back to visual driving (hunting for bucket)
-                print("Finished backing up. Seeking bucket...")
-                self.mode = 0
+                print("Finished backing up. Spinning to search for target...")
+                self.mode = 4 
                 self.driving = True
-                # Reset sensors so it doesn't immediately lock up
                 self.leftActive = True 
                 self.rightActive = True
         
-        # 1. VISUAL DRIVING
-        if self.driving and (self.mode == 0):
+        # --- SEARCH MODE (MODE 4) ---
+        if self.mode == 4:
+            spin_speed = 35 
+            self.data = {"L": spin_speed, "R": -spin_speed} 
+            return self.data
+
+        # --- VISUAL DRIVING & APPROACH (MODES 0 & 1) ---
+        if self.driving and self.mode in [0, 1]:
             slow_start_dist = 1500 
             stop_dist = 500        
             
@@ -660,26 +644,33 @@ class AI_Inputs:
                 forward_speed = self.max_speed
             elif self.distance_mm <= stop_dist:
                 forward_speed = self.min_speed
-                self.mode = 1 # Shift to sensor precision mode
+                if self.mode == 0:
+                    self.mode = 1 
             else:
                 ratio = (self.distance_mm - stop_dist) / (slow_start_dist - stop_dist)
                 forward_speed = self.min_speed + (ratio * (self.max_speed - self.min_speed))
 
-            error = self.target_pos["x"] - (self.frame_width / 2)
-            if abs(error) < self.center_threshold:
+            # FIX: Only steer if the camera actively sees the target right now
+            if self.target_visible:
+                error = self.target_pos["x"] - (self.frame_width / 2)
+                if abs(error) < self.center_threshold:
+                    left_speed = forward_speed
+                    right_speed = forward_speed
+                else:
+                    turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
+                    if error > 0: 
+                        left_speed = forward_speed
+                        right_speed = forward_speed * (1 - turn_amount)
+                    else:
+                        left_speed = forward_speed * (1 + turn_amount)
+                        right_speed = forward_speed
+            else:
+                # Target is out of sight (coasting), drive straight
                 left_speed = forward_speed
                 right_speed = forward_speed
-            else:
-                turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
-                if error > 0: 
-                    left_speed = forward_speed
-                    right_speed = forward_speed * (1 - turn_amount)
-                else:
-                    left_speed = forward_speed * (1 + turn_amount)
-                    right_speed = forward_speed
 
-        # 2. SENSOR STOP LOGIC
-        elif self.mode == 1:
+        # --- SENSOR STOP LOGIC (MODE 1) ---
+        if self.mode == 1:
             r_raw = self.sensorData.get("RightUNO", 999) if self.sensorData else 999
             l_raw = self.sensorData.get("LeftUNO", 999) if self.sensorData else 999
             try:
@@ -688,16 +679,21 @@ class AI_Inputs:
             except:
                 r_dist, l_dist = 999.0, 999.0
 
-            if r_dist <= 50 or self.distance_mm <= 250: self.leftActive = False  
-            if l_dist <= 49 or self.distance_mm <= 250: self.rightActive = False   
+            if not self.ball_grabbed:
+                if (r_dist <= 42) or (self.distance_mm <= 350 and self.distance_mm != 0): self.leftActive = False  
+                if (l_dist <= 49) or (self.distance_mm <= 350 and self.distance_mm != 0): self.rightActive = False   
+            else:
+                if self.distance_mm <= 250 and self.distance_mm != 0: self.leftActive = False  
+                if self.distance_mm <= 250 and self.distance_mm != 0: self.rightActive = False   
             
             if not self.rightActive and not self.leftActive:
                 self.mode = 2
                 self.driving = False
-        elif self.mode == 2:
+                
+        if self.mode == 2:
            self.driving = False
 
-        # 3. APPLY OUTPUT
+        # --- APPLY OUTPUT ---
         if not self.leftActive or not self.driving or self.mode == 2: 
             left_speed = 0
         else: 
