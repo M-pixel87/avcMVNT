@@ -399,7 +399,7 @@ class AI_Inputs:
         self.DROP_REACH_X = 12  
         self.JAW_OPEN = 70
         self.JAW_CLOSED = 10
-        self.GRAB_OFFSET_Y = 2.25
+        self.GRAB_OFFSET_Y = 4
         self.GRAB_OFFSET_X = 0.0      
 
         # --- ARM STATE VARIABLES ---
@@ -472,16 +472,34 @@ class AI_Inputs:
         # --- NEW: Update instantaneous visibility ---
         self.target_visible = found
                     
-        # --- THE "LIDAR LOCK" ---
+        # --- THE "LIDAR LOCK" (Patch Sampling) ---
         if self.driving and self.has_locked_target and depth_frame is not None:
             cx = self.target_pos["x"]
             cy = self.target_pos["y"]
             
-            if 0 <= cy < self.frame_height and 0 <= cx < self.frame_width:
-                d_val = depth_frame[cy, cx] * 0.001
-                if d_val > 0.1: 
-                    self.dist = d_val
-                    self.distance_mm = d_val * 1000 
+            # Define a 10x10 pixel patch around the center point
+            patch_size = 10
+            half_p = patch_size // 2
+            
+            # Clamp boundaries so we don't try to read outside the frame array
+            y_min = max(0, cy - half_p)
+            y_max = min(self.frame_height, cy + half_p)
+            x_min = max(0, cx - half_p)
+            x_max = min(self.frame_width, cx + half_p)
+            
+            # Slice the 2D array to get our patch of depth values
+            depth_patch = depth_frame[y_min:y_max, x_min:x_max]
+            
+            # Filter out the 0s (Intel RealSense returns 0 for failed/reflective pixels)
+            valid_depths = depth_patch[depth_patch > 0]
+            
+            if valid_depths.size > 0:
+                # Find the median depth of the valid pixels and convert to meters
+                median_d_val = np.median(valid_depths) * 0.001
+                
+                if median_d_val > 0.1: 
+                    self.dist = median_d_val
+                    self.distance_mm = median_d_val * 1000
         
         # State-Machine Protection Layer
         if not found:
@@ -497,6 +515,9 @@ class AI_Inputs:
 
 
     def update_arm_logic(self, webcam_detections):
+        if self.count >= len(self.targets):
+            return # Stop arm logic if we are done with all targets
+            
         current_time = time.time()
         wanted_label = self.targets[self.count]
 
@@ -538,7 +559,14 @@ class AI_Inputs:
                     self.targetJawAngle = self.JAW_CLOSED
                     self.y_aligned = True 
                     print(f"LOCKED ON BUCKET -> PUNCHING FORWARD")
+                    
+                    old_x = self.targetX # Store the starting X
                     self.targetX = self.DROP_REACH_X 
+                    
+                    # FIX: Scale Y to lock the base angle
+                    reach_ratio = self.targetX / old_x
+                    self.targetY = self.targetY * reach_ratio
+                    
                     self.grab_state = 1
                     self.state_timer = current_time
                 else:
@@ -546,7 +574,14 @@ class AI_Inputs:
                     self.targetJawAngle = self.JAW_OPEN
                     if self.y_aligned and self.dist > 0:
                         print(f"LOCKED ON BALL -> REACHING (Dist: {self.dist:.3f}m)")
+                        
+                        old_x = self.targetX # Store the starting X
                         self.targetX = ((self.dist * 3.3) * 12) + 9 
+                        
+                        # FIX: Scale Y to lock the base angle
+                        reach_ratio = self.targetX / old_x
+                        self.targetY = self.targetY * reach_ratio
+                        
                         self.grab_state = 1
                         self.state_timer = current_time
 
@@ -578,9 +613,11 @@ class AI_Inputs:
             elif self.grab_state == 4:
                 if self.ball_grabbed:
                     self.targetZ = self.SAFE_HEIGHT 
+                    self.targetY = 0
                 else:
                     self.targetZ = self.DROP_HEIGHT 
-                self.targetX = 9.0 
+                self.targetX = 9.0
+                self.targetY  = 0
                 
                 if current_time - self.state_timer > 2.0:
                     self.grab_state = 0
@@ -602,7 +639,9 @@ class AI_Inputs:
             # --- 3. SEND COMMANDS ---
             if current_time - self.last_command_time > self.command_delay:
                 Arm.move_joint(5, self.targetJawAngle)
-                if self.grab_state > 0:
+                
+                # FIX: Only apply the grab offsets if we don't have the ball yet
+                if self.grab_state > 0 and not self.ball_grabbed:
                     final_x = self.targetX + self.GRAB_OFFSET_X
                     final_y = self.targetY + self.GRAB_OFFSET_Y
                 else:
@@ -631,7 +670,7 @@ class AI_Inputs:
         
         # --- SEARCH MODE (MODE 4) ---
         if self.mode == 4:
-            spin_speed = 35 
+            spin_speed = 60 
             self.data = {"L": spin_speed, "R": -spin_speed} 
             return self.data
 
@@ -666,7 +705,7 @@ class AI_Inputs:
                         right_speed = forward_speed
             else:
                 # Target is out of sight (coasting), drive straight
-                left_speed = forward_speed
+                left_speed = forward_speed+7
                 right_speed = forward_speed
 
         # --- SENSOR STOP LOGIC (MODE 1) ---
@@ -680,11 +719,16 @@ class AI_Inputs:
                 r_dist, l_dist = 999.0, 999.0
 
             if not self.ball_grabbed:
-                if (r_dist <= 42) or (self.distance_mm <= 350 and self.distance_mm != 0): self.leftActive = False  
-                if (l_dist <= 49) or (self.distance_mm <= 350 and self.distance_mm != 0): self.rightActive = False   
+                if (r_dist <= 45 and r_dist >= 30) : self.rightActive = False  
+                if (l_dist <= 45 and l_dist >= 30) : self.leftActive = False   
+                if((self.distance_mm <= 250 and self.distance_mm != 0)):
+                     self.leftActive = False 
+                     self.rightActive = False
+            
             else:
-                if self.distance_mm <= 250 and self.distance_mm != 0: self.leftActive = False  
-                if self.distance_mm <= 250 and self.distance_mm != 0: self.rightActive = False   
+                if self.distance_mm <= 200 and self.distance_mm != 0:
+                     self.leftActive = False 
+                     self.rightActive = False
             
             if not self.rightActive and not self.leftActive:
                 self.mode = 2
