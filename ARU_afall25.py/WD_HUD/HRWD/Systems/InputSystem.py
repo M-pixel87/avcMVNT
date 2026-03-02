@@ -325,6 +325,9 @@ import time
 import math
 import numpy as np
 
+# ==============================================================
+# FIXED AI INPUTS CLASS
+# ==============================================================
 class AI_Inputs:
     def __init__(self, motorSystem, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
         self.data = {"L": 0, "R": 0}
@@ -332,9 +335,9 @@ class AI_Inputs:
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.driving = False
+        self.active_camera = "bottom" # Tracks which camera is guiding us
 
         self.motorSystem = motorSystem
-        
         self.rightActive = True
         self.leftActive = True
         self.state = state
@@ -343,19 +346,16 @@ class AI_Inputs:
         self.dist = 5 
         self.mode = 0  
 
-        # --- BYPASS & WAYPOINT VARIABLES ---
         self.bypass_timer = 0
         self.bypass_state = 0 
         self.last_target_x = self.frame_width / 2 
-        
         self.waypoint_turn_duration = 0.0
         self.waypoint_drive_duration = 0.0
         self.waypoint_turn_dir = 1 
         
-        # --- VERIFICATION & RAMMING VARIABLES ---
         self.verification_timer = 0
         self.verifying_grab = False
-        self.ramming_timer = 0 # NEW: Timer for the ramming maneuver
+        self.ramming_timer = 0 
 
         # --- ARM CONFIGURATION ---
         self.SAFE_HEIGHT = 8  
@@ -373,6 +373,7 @@ class AI_Inputs:
         self.targetZ = self.SAFE_HEIGHT
         self.targetJawAngle = self.JAW_OPEN
         self.reverse_timer = 0  
+        self.sweep_dir = 1 # Added for Mode 4 panning
         
         self.grab_state = 0
         self.state_timer = 0
@@ -396,7 +397,7 @@ class AI_Inputs:
         self.camera_fov_deg = 70.0 
 
 
-    def update_target(self, detections, depth_frame=None):
+    def update_target(self, bottom_detections, top_detections, depth_frame=None):
         if self.count >= len(self.targets):
             self.driving = False
             self.has_locked_target = False 
@@ -418,14 +419,26 @@ class AI_Inputs:
         found = False
         target_det = None
         self.obstacles = [] 
+        self.active_camera = None
 
-        if detections:
-            for det in detections:
+        # 1. Prioritize Bottom Camera
+        if bottom_detections:
+            for det in bottom_detections:
                 if det["label"].lower() == wanted_label.lower():
                     target_det = det
+                    self.active_camera = "bottom"
                 elif "ball" in det["label"].lower() and det["label"].lower() != wanted_label.lower():
                     self.obstacles.append(det)
 
+        # 2. Handoff to Top Camera if target is lost below
+        if target_det is None and top_detections:
+            for det in top_detections:
+                if det["label"].lower() == wanted_label.lower():
+                    target_det = det
+                    self.active_camera = "top"
+                    break # Don't gather obstacles from top since it lacks depth mapping
+
+        # 3. Process Target
         if target_det:
             cx = int((target_det["bbox"][0] + target_det["bbox"][2]) / 2)
             cy = int((target_det["bbox"][1] + target_det["bbox"][3]) / 2)
@@ -439,32 +452,39 @@ class AI_Inputs:
             self.has_locked_target = True 
             
             if self.mode == 4 or self.mode == 1:
-                print(f"👀 Target spotted! Tracking {wanted_label}...")
+                print(f"👀 Target spotted via {self.active_camera} camera! Tracking {wanted_label}...")
                 self.mode = 0
                 
         self.target_visible = found
         
-        if self.driving and self.has_locked_target and depth_frame is not None:
-            cx = self.target_pos["x"]
-            cy = self.target_pos["y"]
-            
-            patch_size = 10
-            half_p = patch_size // 2
-            
-            y_min = max(0, cy - half_p)
-            y_max = min(self.frame_height, cy + half_p)
-            x_min = max(0, cx - half_p)
-            x_max = min(self.frame_width, cx + half_p)
-            
-            depth_patch = depth_frame[y_min:y_max, x_min:x_max]
-            valid_depths = depth_patch[depth_patch > 0]
-            
-            if valid_depths.size > 0:
-                median_d_val = np.median(valid_depths) * 0.001
-                if median_d_val > 0.1: 
-                    self.dist = median_d_val
-                    self.distance_mm = median_d_val * 1000
+        # 4. Handle Distance based on Active Camera
+        if self.driving and self.has_locked_target:
+            if self.active_camera == "bottom" and depth_frame is not None:
+                cx = self.target_pos["x"]
+                cy = self.target_pos["y"]
+                patch_size = 10
+                half_p = patch_size // 2
+                
+                y_min = max(0, cy - half_p)
+                y_max = min(self.frame_height, cy + half_p)
+                x_min = max(0, cx - half_p)
+                x_max = min(self.frame_width, cx + half_p)
+                
+                depth_patch = depth_frame[y_min:y_max, x_min:x_max]
+                valid_depths = depth_patch[depth_patch > 0]
+                
+                if valid_depths.size > 0:
+                    median_d_val = np.median(valid_depths) * 0.001
+                    if median_d_val > 0.1: 
+                        self.dist = median_d_val
+                        self.distance_mm = median_d_val * 1000
+            elif self.active_camera == "top":
+                # We lack depth. Feed a dummy safe distance to keep the vehicle pushing forward in Mode 0 
+                # until the bottom camera acquires it.
+                self.dist = 3.0
+                self.distance_mm = 3000
 
+            # Calculate Obstacle Distances (Only relies on depth_frame/bottom camera)
             for obs in self.obstacles:
                 obs_cx = int((obs["bbox"][0] + obs["bbox"][2]) / 2)
                 obs_cy = int((obs["bbox"][1] + obs["bbox"][3]) / 2)
@@ -482,6 +502,7 @@ class AI_Inputs:
                 else:
                     obs["distance_mm"] = 9999
 
+            # Waypoint/Bypass Logic
             if self.mode == 0 and self.distance_mm < 2500 and self.distance_mm > 0:
                 closest_obstacle_dist = 9999
                 closest_obstacle_x = 0
@@ -489,7 +510,6 @@ class AI_Inputs:
                 for obs in self.obstacles:
                     obs_x = obs["center"][0]
                     obs_dist = obs["distance_mm"]
-                    
                     if abs(obs_x - cx) < 200: 
                         if obs_dist < closest_obstacle_dist:
                             closest_obstacle_dist = obs_dist
@@ -497,7 +517,6 @@ class AI_Inputs:
                 
                 if (closest_obstacle_dist < (self.distance_mm - 200) and closest_obstacle_dist <= 2500):
                     print(f"🛑 Corridor Blocked! Target: {self.distance_mm}mm, Obstacle: {closest_obstacle_dist}mm")
-                    
                     pixels_from_center = closest_obstacle_x - (self.frame_width / 2)
                     degrees_per_pixel = self.camera_fov_deg / self.frame_width
                     angle_to_obs = pixels_from_center * degrees_per_pixel
@@ -516,7 +535,6 @@ class AI_Inputs:
                         self.waypoint_turn_dir = -1
                         
                     waypoint_x = obs_cartesian_x 
-                    
                     dist_to_waypoint = math.hypot(waypoint_x, waypoint_y)
                     heading_to_waypoint = math.degrees(math.atan2(waypoint_y, waypoint_x))
                     
@@ -537,7 +555,6 @@ class AI_Inputs:
                     self.bypass_timer = time.time()
 
         if not found:
-            # FIX: Added Mode 7 to protected states
             if self.mode in [1, 2, 3, 6, 7]: 
                 pass 
             elif self.driving and self.distance_mm < 1200 and self.has_locked_target and self.mode == 0:
@@ -556,6 +573,23 @@ class AI_Inputs:
         current_time = time.time()
         wanted_label = self.targets[self.count]
 
+        # --- NON-GRABBING ARM STATES ---
+        if self.mode == 4:
+            # ACTIVE SCANNING: Sweep the arm left and right to expand FOV
+            self.targetY += 0.5 * self.sweep_dir
+            if self.targetY > 12.0: self.sweep_dir = -1
+            elif self.targetY < -12.0: self.sweep_dir = 1
+            self.targetX = 8.0
+            self.targetZ = self.SAFE_HEIGHT
+        elif self.mode in [0, 1]:
+            # APPROACHING: Snap back to center. 
+            # If the top camera is driving, centering the arm forces the chassis steering to align with the target.
+            self.targetY = 0.0
+            self.targetX = 9.0
+            self.targetZ = self.SAFE_HEIGHT
+
+
+        # --- GRABBING ARM STATES ---
         if self.mode == 2 and self.grab_state == 0:
             webcam_sees_target = False
             centered_this_frame = False
@@ -595,7 +629,6 @@ class AI_Inputs:
                     
                     old_x = self.targetX 
                     self.targetX = self.DROP_REACH_X 
-                    
                     reach_ratio = self.targetX / old_x
                     self.targetY = self.targetY * reach_ratio
                     
@@ -606,16 +639,11 @@ class AI_Inputs:
                     self.targetJawAngle = self.JAW_OPEN
                     if self.y_aligned and self.dist > 0:
                         print(f"LOCKED ON BALL -> REACHING (Dist: {self.dist:.3f}m)")
-                        
                         old_x = self.targetX 
                         self.targetX = ((self.dist * 3.3) * 12) + 9 
-                        
                         reach_ratio = self.targetX / old_x
                         self.targetY = self.targetY * reach_ratio
                         
-                        # --- NEW: UNREACHABLE TARGET CHECK ---
-                        # If the calculated X, Y, Z coordinates are physically impossible,
-                        # abort the grab and trigger Ramming Speed!
                         arm1 = 10
                         arm2 = 14
                         max_reach = arm1 + arm2
@@ -625,12 +653,11 @@ class AI_Inputs:
                             print("⚠️ Target is OUT OF REACH! Initiating Ramming Speed...")
                             self.mode = 7
                             self.ramming_timer = time.time()
-                            # Reset arm to safe position so we don't drag the claw
                             self.targetX = 9.0
                             self.targetY = 0.0
                             self.targetZ = self.SAFE_HEIGHT
                             self.grab_state = 0
-                            return # Exit logic early
+                            return 
                         
                         self.grab_state = 1
                         self.state_timer = current_time
@@ -686,31 +713,29 @@ class AI_Inputs:
                         print("GRAB COMPLETE -> BACKING UP FOR VERIFICATION")
                         self.verifying_grab = True 
 
-            if current_time - self.last_command_time > self.command_delay:
-                Arm.move_joint(5, self.targetJawAngle)
-                
-                if self.grab_state > 0 and not self.ball_grabbed:
-                    final_x = self.targetX + self.GRAB_OFFSET_X
-                    final_y = self.targetY + self.GRAB_OFFSET_Y
-                else:
-                    final_x = self.targetX
-                    final_y = self.targetY
-                
-                Arm.move_arm_to(final_x, final_y, self.targetZ)
-                self.last_command_time = current_time
+        # Fire commands to Arm hardware if delay allows
+        if current_time - self.last_command_time > self.command_delay:
+            Arm.move_joint(5, self.targetJawAngle)
+            
+            if self.grab_state > 0 and not self.ball_grabbed:
+                final_x = self.targetX + self.GRAB_OFFSET_X
+                final_y = self.targetY + self.GRAB_OFFSET_Y
+            else:
+                final_x = self.targetX
+                final_y = self.targetY
+            
+            Arm.move_arm_to(final_x, final_y, self.targetZ)
+            self.last_command_time = current_time
 
     def move_command(self):
         left_speed = 0
         right_speed = 0
         
-        # --- NEW: MODE 7 (RAMMING SPEED) ---
         if self.mode == 7:
             if time.time() - self.ramming_timer < 1.0:
-                # Drive forward at 100% power to bash through whatever is blocking us
                 return {"L": -100, "R": -100}
             else:
                 print("Ramming complete. Attempting to re-acquire target...")
-                # Back up slightly so we have room to swing the arm
                 self.mode = 3
                 self.reverse_timer = time.time()
                 return {"L": 0, "R": 0}
@@ -738,7 +763,6 @@ class AI_Inputs:
                     self.rightActive = True
                     return {"L": 0, "R": 0}
 
-        # --- REVERSE MODE (MODE 3) WITH VERIFICATION ---
         if self.mode == 3:
             if time.time() - self.reverse_timer < 3.0:
                 reverse_speed = 50  
