@@ -44,7 +44,7 @@ class AI:
 # Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine', conf_threshold=0.1):
+    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine', conf_threshold=0.3):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
@@ -348,13 +348,13 @@ class AI_Inputs:
         self.sensor_stop_max = 52    # Max Ultrasonic sensor distance to stop wheels
         self.sensor_stop_min = 20    # Min Ultrasonic sensor distance to stop wheels
         self.cam_stop_ball = 300     # Depth camera distance (mm) to stop for ball
-        self.cam_stop_bucket = 325   # Depth camera distance (mm) to stop for bucket
+        self.cam_stop_bucket = 400   # Depth camera distance (mm) to stop for bucket
         
         # --- ARM CONFIGURATION & LIMITS ---
-        self.SAFE_HEIGHT = 9         # Safe travel height
+        self.SAFE_HEIGHT = 7         # Safe travel height
         self.GRAB_HEIGHT = -2.0      # Z-height to grab balls
-        self.DROP_HEIGHT = 16       # Z-height to drop into bucket
-        self.DROP_REACH_X = 14      # Forward X-reach when dropping
+        self.DROP_HEIGHT = 16        # Z-height to drop into bucket
+        self.DROP_REACH_X = 14       # Forward X-reach when dropping
         self.JAW_OPEN = 70           # Servo angle for open claw
         self.JAW_CLOSED = 10         # Servo angle for closed claw
         self.GRAB_OFFSET_Y = 4       # Y-axis grab correction
@@ -372,7 +372,7 @@ class AI_Inputs:
         self.state = state
         self.sensorData = sensorData
         self.targets = targets
-        self.count = 0
+        self.count = 1
         self.obstacles = []
 
         # Frame & Camera tracking
@@ -419,6 +419,7 @@ class AI_Inputs:
         self.center_counter = 0 
         self.y_aligned = False 
         self.ball_grabbed = False
+        self.lost_target_timer = 0  
 
 
     def update_target(self, bottom_detections, top_detections, depth_frame=None):
@@ -453,7 +454,9 @@ class AI_Inputs:
                 elif "ball" in det["label"].lower() and det["label"].lower() != wanted_label.lower():
                     self.obstacles.append(det)
 
-        if target_det is None and top_detections:
+        # <--- FIX: ONLY fall back to top camera if we are NOT carrying a ball.
+        # This prevents the robot from mistaking the ball in its claw for the bucket!
+        if target_det is None and top_detections and not self.ball_grabbed:
             for det in top_detections:
                 if det["label"].lower() == wanted_label.lower():
                     target_det = det
@@ -463,6 +466,8 @@ class AI_Inputs:
         if target_det:
             cx = int((target_det["bbox"][0] + target_det["bbox"][2]) / 2)
             cy = int((target_det["bbox"][1] + target_det["bbox"][3]) / 2)
+            
+            self.target_height = target_det["bbox"][3] - target_det["bbox"][1]
             
             self.target_pos["x"] = cx
             self.target_pos["y"] = cy
@@ -478,18 +483,22 @@ class AI_Inputs:
                 
         self.target_visible = found
         
-        # FIX 1: Only update depth if the target is ACTUALLY visible (Prevents ghosting)
-        if self.driving and self.target_visible:
-            if self.active_camera == "bottom" and depth_frame is not None:
-                cx = self.target_pos["x"]
-                cy = self.target_pos["y"]
-                patch_size = 10
+        # ==============================================================
+        # REWORKED ROBUST LIDAR CALCULATION
+        # ==============================================================
+        if self.driving and depth_frame is not None:
+            
+            # 1. Standard Lidar Tracking (We clearly see the object)
+            if self.target_visible and self.active_camera == "bottom":
+                cx_safe = self.target_pos["x"]
+                cy_safe = self.target_pos["y"]
+                patch_size = 20
                 half_p = patch_size // 2
                 
-                y_min = max(0, cy - half_p)
-                y_max = min(self.frame_height, cy + half_p)
-                x_min = max(0, cx - half_p)
-                x_max = min(self.frame_width, cx + half_p)
+                y_min = max(0, cy_safe - half_p)
+                y_max = min(self.frame_height, cy_safe + half_p)
+                x_min = max(0, cx_safe - half_p)
+                x_max = min(self.frame_width, cx_safe + half_p)
                 
                 depth_patch = depth_frame[y_min:y_max, x_min:x_max]
                 valid_depths = depth_patch[depth_patch > 0]
@@ -499,11 +508,40 @@ class AI_Inputs:
                     if median_d_val > 0.1: 
                         self.dist = median_d_val
                         self.distance_mm = median_d_val * 1000
-            elif self.active_camera == "top":
-                self.dist = 1.0  # Reduced generic distance to 1000mm to prevent ramming
-                self.distance_mm = 1000
 
-        # FIX 3: Safely calculate obstacles ONLY if depth frame exists
+            # 2. BLIND LIDAR OVERRIDE: We lost the bucket, but we are extremely close (Mode 1).
+            # Use the LAST KNOWN center of the bucket to sample the physical body!
+            elif self.ball_grabbed and self.mode == 1:
+                last_cx = self.target_pos["x"]
+                last_cy = self.target_pos["y"]
+                
+                # Create a large depth patch directly around the bucket's last known center
+                patch_w = 100  # 200 pixels wide
+                patch_h = 60   # 120 pixels tall
+                
+                y_min = max(0, int(last_cy - patch_h))
+                y_max = min(self.frame_height, int(last_cy + patch_h))
+                x_min = max(0, int(last_cx - patch_w))
+                x_max = min(self.frame_width, int(last_cx + patch_w))
+                
+                depth_patch = depth_frame[y_min:y_max, x_min:x_max]
+                
+                # Filter out the far background wall (anything past 1.5 meters)
+                valid_depths = depth_patch[(depth_patch > 0) & (depth_patch < 1500)]
+                
+                if valid_depths.size > 0:
+                    # Since we are looking dead-center at the bucket body, the median is perfect
+                    body_dist = np.median(valid_depths) * 0.001
+                    if body_dist > 0.05: 
+                        self.dist = body_dist
+                        self.distance_mm = body_dist * 1000
+
+            # 3. Top Camera Fallback (Only applied if tracking a ball from far away)
+            elif self.active_camera == "top":
+                self.dist = 1.5  
+                self.distance_mm = 1500
+
+        # Safely calculate obstacles ONLY if depth frame exists
         if depth_frame is not None:
             for obs in self.obstacles:
                 obs_cx = int((obs["bbox"][0] + obs["bbox"][2]) / 2)
@@ -529,10 +567,12 @@ class AI_Inputs:
             closest_obstacle_dist = 9999
             closest_obstacle_x = 0
             
+            current_target_x = self.target_pos["x"]
+            
             for obs in self.obstacles:
                 obs_x = obs["center"][0]
                 obs_dist = obs["distance_mm"]
-                if abs(obs_x - cx) < 200: 
+                if abs(obs_x - current_target_x) < 200: 
                     if obs_dist < closest_obstacle_dist:
                         closest_obstacle_dist = obs_dist
                         closest_obstacle_x = obs_x
@@ -549,7 +589,7 @@ class AI_Inputs:
                 
                 flank_offset_mm = 450.0 
                 
-                if closest_obstacle_x < cx or abs(closest_obstacle_x - cx) < 30:
+                if closest_obstacle_x < current_target_x or abs(closest_obstacle_x - current_target_x) < 30:
                     waypoint_y = obs_cartesian_y + flank_offset_mm
                     self.waypoint_turn_dir = 1
                 else:
@@ -561,7 +601,7 @@ class AI_Inputs:
                 heading_to_waypoint = math.degrees(math.atan2(waypoint_y, waypoint_x))
                 
                 max_speed_mm_s = 914.4 / 1.6 
-                bypass_drive_speed_mm_s = max_speed_mm_s * 0.325 
+                bypass_drive_speed_mm_s = max_speed_mm_s * 0.65 
                 turn_speed_deg_s = 60.0 
                 
                 self.waypoint_turn_duration = abs(heading_to_waypoint) / turn_speed_deg_s
@@ -600,11 +640,14 @@ class AI_Inputs:
             if self.targetY > 12.0: self.sweep_dir = -1
             elif self.targetY < -12.0: self.sweep_dir = 1
             self.targetX = 8.0
-            self.targetZ = self.SAFE_HEIGHT
+            # Keep arm raised to DROP_HEIGHT if carrying a ball
+            self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
+            
         elif self.mode in [0, 1]:
             self.targetY = 0.0
             self.targetX = 9.0
-            self.targetZ = self.SAFE_HEIGHT
+            # Keep arm raised to DROP_HEIGHT if carrying a ball
+            self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
 
         if self.mode == 2 and self.grab_state == 0:
             webcam_sees_target = False
@@ -625,6 +668,26 @@ class AI_Inputs:
                         self.y_aligned = False
                     else:
                         centered_this_frame = True
+
+            # RAM AND RETRY TIMEOUT logic
+            if not webcam_sees_target and not self.ball_grabbed:
+                if self.lost_target_timer == 0:
+                    self.lost_target_timer = current_time # Start the clock
+                elif current_time - self.lost_target_timer > 3.0: # 3 seconds passed
+                    print("⚠️ Ball lost during pickup! Ramming to reset...")
+                    self.mode = 7
+                    self.ramming_timer = current_time
+                    self.targetX = 9.0
+                    self.targetY = 0.0
+                    self.targetZ = self.SAFE_HEIGHT
+                    self.grab_state = 0
+                    self.lost_target_timer = 0
+                    self.driving = True
+                    self.leftActive = True
+                    self.rightActive = True
+                    return # Exit the function so we can ram immediately
+            else:
+                self.lost_target_timer = 0 # Reset timer if we see the ball
             
             if webcam_sees_target:
                 if centered_this_frame:
@@ -876,14 +939,21 @@ class AI_Inputs:
                 if((self.distance_mm <= self.cam_stop_ball and self.distance_mm != 0)):
                      self.leftActive = False 
                      self.rightActive = False
-            #blind drive towards the bucket
+            
+            # blind drive towards the bucket
             else:
+                if (r_dist <= self.sensor_stop_max and r_dist >= self.sensor_stop_min) : self.rightActive = False  
+                if (l_dist <= self.sensor_stop_max and l_dist >= self.sensor_stop_min) : self.leftActive = False 
+                
+                # 1. Standard / Blind Lidar Depth Stop
                 if self.distance_mm <= self.cam_stop_bucket and self.distance_mm != 0:
+                     print(f"Lidar Stop Triggered at {self.distance_mm}mm")
                      self.leftActive = False 
                      self.rightActive = False
-                # FIX 2: Coast to a stop if we lose the bucket but were getting close
-                elif not self.target_visible and self.distance_mm < 450:
-                     print("Bucket in blind spot! Coasting to stop...")
+                
+                # 2. VISUAL KILLSWITCH
+                elif getattr(self, "target_height", 0) > (self.frame_height * 0.75):
+                     print("Bucket filling camera frame! Visual Killswitch Activated.")
                      self.leftActive = False
                      self.rightActive = False
             
