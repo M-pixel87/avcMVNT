@@ -62,6 +62,9 @@ infer = AI_YOLO(conf_threshold=0.3)
 motors = CytronMotor(in1=4, an1=5, in2=7, an2=6, ser=ser)
 sensors = sensorSystem(ser)
 
+# >>> NEW: Start the background serial reading thread immediately <<<
+sensors.start()
+
 display = DisplaySystem(cam.camera, mode="YOLO")
 display2 = DisplaySystem(cam = cam2 ,name = "CAM2", mode="YOLO")
 ai_Inputs = AI_Inputs(motorSystem = motors, frame_width=cam.width, frame_height=cam.height, state=inputState)
@@ -98,13 +101,17 @@ def main():
         print("Stopping...")
         motors.set_power(0, 0) 
         cam.release()          
-        infer.release()        
+        infer.release()
+        # >>> NEW: Cleanly shut down the background serial thread on exit <<<
+        sensors.stop()        
 
 # --- CORE LOGIC LOOP ---
 def inputDisplay():
     active_Cmd = {"L": 0, "R": 0}
     
-    data = sensors.readSensors()
+    # >>> NEW: Instantly grab the latest dictionary without waiting for the serial buffer <<<
+    data = sensors.get_data()
+    
     ai_Inputs.sensorData = data 
     cmd_id = data.get("CMDID")
     

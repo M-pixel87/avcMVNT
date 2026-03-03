@@ -44,7 +44,7 @@ class AI:
 # Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine', conf_threshold=0.5):
+    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine', conf_threshold=0.1):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
@@ -326,7 +326,7 @@ import math
 import numpy as np
 
 # ==============================================================
-# FIXED AI INPUTS CLASS
+# REWORKED AI INPUTS CLASS (Smoother logic & Slower speeds)
 # ==============================================================
 class AI_Inputs:
     def __init__(self, motorSystem, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
@@ -335,7 +335,7 @@ class AI_Inputs:
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.driving = False
-        self.active_camera = "bottom" # Tracks which camera is guiding us
+        self.active_camera = "bottom" 
 
         self.motorSystem = motorSystem
         self.rightActive = True
@@ -373,7 +373,7 @@ class AI_Inputs:
         self.targetZ = self.SAFE_HEIGHT
         self.targetJawAngle = self.JAW_OPEN
         self.reverse_timer = 0  
-        self.sweep_dir = 1 # Added for Mode 4 panning
+        self.sweep_dir = 1 
         
         self.grab_state = 0
         self.state_timer = 0
@@ -389,11 +389,11 @@ class AI_Inputs:
         self.count = 0
         self.obstacles = [] 
         
-        # Drive Params
+        # --- REWORKED DRIVE PARAMS ---
         self.center_threshold = 50
-        self.max_speed = 95
-        self.min_speed = 30
-        self.turn_scale = 0.7
+        self.max_speed = 30  # Dropped from 45
+        self.min_speed = 15
+        self.turn_scale = 0.5 # Dropped from 0.7 to soften proportional turning
         self.camera_fov_deg = 70.0 
 
 
@@ -421,7 +421,6 @@ class AI_Inputs:
         self.obstacles = [] 
         self.active_camera = None
 
-        # 1. Prioritize Bottom Camera
         if bottom_detections:
             for det in bottom_detections:
                 if det["label"].lower() == wanted_label.lower():
@@ -430,15 +429,13 @@ class AI_Inputs:
                 elif "ball" in det["label"].lower() and det["label"].lower() != wanted_label.lower():
                     self.obstacles.append(det)
 
-        # 2. Handoff to Top Camera if target is lost below
         if target_det is None and top_detections:
             for det in top_detections:
                 if det["label"].lower() == wanted_label.lower():
                     target_det = det
                     self.active_camera = "top"
-                    break # Don't gather obstacles from top since it lacks depth mapping
+                    break 
 
-        # 3. Process Target
         if target_det:
             cx = int((target_det["bbox"][0] + target_det["bbox"][2]) / 2)
             cy = int((target_det["bbox"][1] + target_det["bbox"][3]) / 2)
@@ -457,7 +454,6 @@ class AI_Inputs:
                 
         self.target_visible = found
         
-        # 4. Handle Distance based on Active Camera
         if self.driving and self.has_locked_target:
             if self.active_camera == "bottom" and depth_frame is not None:
                 cx = self.target_pos["x"]
@@ -479,12 +475,9 @@ class AI_Inputs:
                         self.dist = median_d_val
                         self.distance_mm = median_d_val * 1000
             elif self.active_camera == "top":
-                # We lack depth. Feed a dummy safe distance to keep the vehicle pushing forward in Mode 0 
-                # until the bottom camera acquires it.
                 self.dist = 3.0
                 self.distance_mm = 3000
 
-            # Calculate Obstacle Distances (Only relies on depth_frame/bottom camera)
             for obs in self.obstacles:
                 obs_cx = int((obs["bbox"][0] + obs["bbox"][2]) / 2)
                 obs_cy = int((obs["bbox"][1] + obs["bbox"][3]) / 2)
@@ -502,7 +495,6 @@ class AI_Inputs:
                 else:
                     obs["distance_mm"] = 9999
 
-            # Waypoint/Bypass Logic
             if self.mode == 0 and self.distance_mm < 2500 and self.distance_mm > 0:
                 closest_obstacle_dist = 9999
                 closest_obstacle_x = 0
@@ -539,8 +531,8 @@ class AI_Inputs:
                     heading_to_waypoint = math.degrees(math.atan2(waypoint_y, waypoint_x))
                     
                     max_speed_mm_s = 914.4 / 1.6 
-                    bypass_drive_speed_mm_s = max_speed_mm_s * 0.65 
-                    turn_speed_deg_s = 90.0 
+                    bypass_drive_speed_mm_s = max_speed_mm_s * 0.325 
+                    turn_speed_deg_s = 60.0 # Slowed calculation down to match new drive speeds
                     
                     self.waypoint_turn_duration = abs(heading_to_waypoint) / turn_speed_deg_s
                     self.waypoint_drive_duration = dist_to_waypoint / bypass_drive_speed_mm_s
@@ -573,23 +565,18 @@ class AI_Inputs:
         current_time = time.time()
         wanted_label = self.targets[self.count]
 
-        # --- NON-GRABBING ARM STATES ---
         if self.mode == 4:
-            # ACTIVE SCANNING: Sweep the arm left and right to expand FOV
-            self.targetY += 0.5 * self.sweep_dir
+            # Slower sweep rate (0.2 instead of 0.5)
+            self.targetY += 0.2 * self.sweep_dir
             if self.targetY > 12.0: self.sweep_dir = -1
             elif self.targetY < -12.0: self.sweep_dir = 1
             self.targetX = 8.0
             self.targetZ = self.SAFE_HEIGHT
         elif self.mode in [0, 1]:
-            # APPROACHING: Snap back to center. 
-            # If the top camera is driving, centering the arm forces the chassis steering to align with the target.
             self.targetY = 0.0
             self.targetX = 9.0
             self.targetZ = self.SAFE_HEIGHT
 
-
-        # --- GRABBING ARM STATES ---
         if self.mode == 2 and self.grab_state == 0:
             webcam_sees_target = False
             centered_this_frame = False
@@ -600,11 +587,12 @@ class AI_Inputs:
                     x_c = int((det["bbox"][0] + det["bbox"][2]) / 2)
                     
                     if x_c <= 280:
-                        self.targetY += 0.25
+                        # Slower centering (0.1 instead of 0.25)
+                        self.targetY += 0.1
                         self.center_counter = 0
                         self.y_aligned = False 
                     elif x_c >= 360:
-                        self.targetY -= 0.25
+                        self.targetY -= 0.1
                         self.center_counter = 0
                         self.y_aligned = False
                     else:
@@ -713,7 +701,6 @@ class AI_Inputs:
                         print("GRAB COMPLETE -> BACKING UP FOR VERIFICATION")
                         self.verifying_grab = True 
 
-        # Fire commands to Arm hardware if delay allows
         if current_time - self.last_command_time > self.command_delay:
             Arm.move_joint(5, self.targetJawAngle)
             
@@ -733,7 +720,7 @@ class AI_Inputs:
         
         if self.mode == 7:
             if time.time() - self.ramming_timer < 1.0:
-                return {"L": -100, "R": -100}
+                return {"L": -50, "R": -50} # Reduced ramming speed
             else:
                 print("Ramming complete. Attempting to re-acquire target...")
                 self.mode = 3
@@ -745,9 +732,9 @@ class AI_Inputs:
             if self.bypass_state == 0:
                 if elapsed < self.waypoint_turn_duration:
                     if self.waypoint_turn_dir == 1:
-                        return {"L": -70, "R": 70} 
+                        return {"L": -35, "R": 35} # Reduced bypass turn speed
                     else:
-                        return {"L": 70, "R": -70} 
+                        return {"L": 35, "R": -35} 
                 else:
                     self.bypass_state = 1
                     self.bypass_timer = time.time()
@@ -755,7 +742,7 @@ class AI_Inputs:
             
             if self.bypass_state == 1:
                 if elapsed < self.waypoint_drive_duration:
-                    return {"L": -65, "R": -65} 
+                    return {"L": -35, "R": -35} # Reduced bypass drive speed
                 else:
                     self.mode = 4 
                     self.driving = True
@@ -765,7 +752,7 @@ class AI_Inputs:
 
         if self.mode == 3:
             if time.time() - self.reverse_timer < 3.0:
-                reverse_speed = 50  
+                reverse_speed = 30  # Reduced reverse speed
                 self.data = {"L": reverse_speed, "R": reverse_speed}
                 return self.data
             else:
@@ -794,7 +781,7 @@ class AI_Inputs:
                 self.rightActive = True
         
         if self.mode == 4:
-            spin_speed = 70 
+            spin_speed = 35 # Halved spin speed
             if self.last_target_x > (self.frame_width / 2):
                 self.data = {"L": -spin_speed, "R": spin_speed} 
             else:

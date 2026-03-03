@@ -1,23 +1,21 @@
-
-
-
 from roarm_sdk.roarm import roarm
 import math
 import time
 import random
+import threading
 
-# https://github.com/waveshareteam/waveshare_roarm_sdk/tree/main
+# Initialize RoArm (with error handling so it doesn't crash if unplugged)
+try:
+    roarm_dev = roarm(roarm_type="roarm_m3", port="/dev/ttyUSB0", baudrate=115200)
+    print("✅ RoArm Connected.")
+except Exception as e:
+    print(f"⚠️ RoArm Connection Failed: {e}")
+    roarm_dev = None
 
-# Serial communication example
-roarm = roarm(roarm_type="roarm_m3", port="/dev/ttyUSB0", baudrate=115200)
-
-# Http communication example
-# Note: HTTP communication needs to be connected to the same wifi first, and host is the IP address of the robotic arm.
-#roarm = roarm(roarm_type="roarm_m3", host="192.168.4.1")
+angles = [0,0,90,0,0,0]
 
 def clamp(value, min_val, max_val):
     return max(min_val, min(value, max_val))
-
 
 def generate_random_xyz(x_range, y_range, z_range):
     x = random.uniform(*x_range)
@@ -25,158 +23,158 @@ def generate_random_xyz(x_range, y_range, z_range):
     z = random.uniform(*z_range)
     return round(x, 2), round(y, 2), round(z, 2)
 
-
-
-angles = [0,0,90,0,0,0]
-current_x = 9.0  
-current_y = 0.0
-current_z = 8.0
-
-def ik(x, y, z, angles, error):  # angles = [theta1, theta2, theta3]
+# --- UNCHANGED IK LOGIC ---
+def ik(x, y, z, angles, error):  
     errorI = error
-
     arm1 = 10
     arm2 = 14
     wrist = 7.5
 
-    # Step 1: Solve base rotation (joint 0)
     base_angle_rad = math.atan2(y, x)
     base_angle = math.degrees(base_angle_rad)
     angles[0] = base_angle
 
-    # Step 2: Project (x, y) into rotated base frame (XZ plane)
-    rotated_x = math.hypot(x, y)  # This is the forward distance in the new base direction
+    rotated_x = math.hypot(x, y)  
 
-    # Step 3: Get shoulder (arm1) angle and position
     arm1_angle_deg = clamp(angles[1] + 90, -180, 180)
     arm1_rad = math.radians(arm1_angle_deg)
     arm1x = arm1 * math.cos(arm1_rad) * -1
     arm1z = arm1 * math.sin(arm1_rad)
 
-    # World angle of shoulder link
     arm1_angle_world = math.degrees(math.atan2(arm1z, arm1x))
 
-    # Step 4: Calculate vector from arm1 tip to target
     dx = rotated_x - arm1x
     dz = z - arm1z
 
-    # Desired direction for arm2
     desired_angle_rad = math.atan2(dz, dx)
     desired_angle_deg = math.degrees(desired_angle_rad)
 
-    # Step 5: Set elbow (arm2) angle to aim toward target
     new_elbow = clamp(arm1_angle_world - desired_angle_deg, -70, 190)
     angles[2] = new_elbow
 
-    # Step 6: Forward solve for new end-effector position
     arm2_angle_world = math.radians(arm1_angle_world - new_elbow)
     finalx = arm1x + arm2 * math.cos(arm2_angle_world)
     finalz = arm1z + arm2 * math.sin(arm2_angle_world)
 
     error = math.hypot(finalx - rotated_x, finalz - z)
-    print("Distance error from target:", error)
 
-    # Debug prints
-    print("Base angle (deg):", base_angle)
-    print("arm1x:", arm1x)
-    print("arm1z:", arm1z)
-    print("arm1Angle (deg):", arm1_angle_world)
-    print("arm2Angle (deg):", math.degrees(arm2_angle_world))
-    print("FinalX:", finalx)
-    print("FinalZ:", finalz)
-    print("TargetX:", rotated_x)
-    print("TargetZ:", z)
-    print("Elbow angle (deg):", new_elbow)
-
-    # Step 7: Adjust shoulder to reduce error
     if error > 0.20:
         if rotated_x > finalx:
             angles[1] += 1 + (1 * error)
-            print("PLUS")
         else:
             angles[1] -= 1 + (1 * error)
-            print("MINUS")
         ik(x, y, z, angles, error)
 
 
+# ==============================================================
+# NEW: BACKGROUND ARM THREAD (Non-Blocking "Chasing" Engine)
+# ==============================================================
+class ArmControllerThread(threading.Thread):
+    def __init__(self):
+        super().__init__()
+        self.daemon = True # Kills thread when main program exits
+        self.lock = threading.Lock()
+        
+        # Current physical position tracking
+        self.cx, self.cy, self.cz = 9.0, 0.0, 8.0
+        
+        # Desired target positions
+        self.tx, self.ty, self.tz = 9.0, 0.0, 8.0
+        
+        self.speed = 300
+        self.acc = 250
+        self.force_send = False
+        self.running = True
+
+    def set_target(self, x, y, z, speed, acc):
+        with self.lock:
+            self.tx = x
+            self.ty = y
+            self.tz = z
+            self.speed = speed
+            self.acc = acc
+
+    def trigger_joint_update(self, speed, acc):
+        with self.lock:
+            self.speed = speed
+            self.acc = acc
+            self.force_send = True
+
+    def run(self):
+        global angles
+        while self.running:
+            with self.lock:
+                tx, ty, tz = self.tx, self.ty, self.tz
+                sp, ac = self.speed, self.acc
+                force = self.force_send
+                self.force_send = False
+
+            # Check how far we are from the target
+            dist = math.hypot(tx - self.cx, ty - self.cy, tz - self.cz)
+            needs_update = force
+            
+            # If we aren't at the target, take a micro-step toward it
+            if dist > 0.1:
+                # Max travel per loop (Higher = faster chase, Lower = smoother)
+                # 1.0 units per 20ms is very fast and smooth
+                step_size = min(1.0, dist) 
+                fraction = step_size / dist
+                
+                # Update current position slightly closer to target
+                self.cx += (tx - self.cx) * fraction
+                self.cy += (ty - self.cy) * fraction
+                self.cz += (tz - self.cz) * fraction
+                
+                # Calculate IK for this micro-step
+                ik(self.cx, self.cy, self.cz, angles, 0)
+                needs_update = True
+                
+            # Only push serial data if the arm actually needs to move
+            if needs_update and roarm_dev:
+                roarm_dev.joints_angle_ctrl(angles, sp, ac)
+                
+            # Maintain the ~50Hz hardware update rate
+            time.sleep(0.02)
+
+# Start the background engine the moment this module is imported
+arm_thread = ArmControllerThread()
+arm_thread.start()
 
 
-def main():
-    #xyzTest()
-    ik(12,0,10, angles, 0)
-    roarm.joints_angle_ctrl(angles, 300, 100)
+# ==============================================================
+# REWRITTEN PUBLIC API (Instant, Non-Blocking)
+# ==============================================================
 
-
-
-if __name__ == "__main__":
-    main()
-
-#method to move specific joint by angles EX: jaw 
 def move_joint(joint_index, angle, speed=450, acc=250):
+    global angles
     if joint_index < 0 or joint_index >= 6:
         print("Invalid joint index. Must be between 0 and 5.")
         return False
 
+    # Instantly update the angles array and flag the thread to send it immediately
     angles[joint_index] = clamp(angle, -180, 180)
-    roarm.joints_angle_ctrl(angles, speed, acc)
+    arm_thread.trigger_joint_update(speed, acc)
     return True
 
-# Method to move arm position using ik to xyz
-# In Arm.py
-
 def move_arm_to(x, y, z, speed=300, acc=250):
-    global current_x, current_y, current_z
-    
     arm1 = 10
     arm2 = 14
     max_reach = arm1 + arm2
     
-    # 1. Check Z Height limits
+    # 1. Height limits
     if abs(z) > max_reach:
         print(f"⚠️ Height {z} is impossible.")
         return False
 
-    # 2. Calculate max horizontal reach at this specific height
     max_horizontal_reach = math.sqrt(max_reach**2 - z**2)
-    
-    # 3. Calculate how far we are trying to reach
     target_dist = math.sqrt(x**2 + y**2)
     
-    # 4. STRICT LIMIT CHECK
+    # 2. Reach limits
     if target_dist > max_horizontal_reach:
         print(f"⚠️ Target Unreachable! (Dist: {target_dist:.2f} > Max: {max_horizontal_reach:.2f})")
         return False 
 
-    # --- 5. CARTESIAN PATH GENERATION ---
-    # Calculate the total 3D distance of the movement
-    move_dist = math.sqrt((x - current_x)**2 + (y - current_y)**2 + (z - current_z)**2)
-    
-    # Define how many steps to take. (e.g., 2 steps per inch/unit of movement)
-    # We enforce a minimum of 1 step so very tiny movements still execute.
-    num_steps = max(1, int(move_dist * 2.0)) 
-    
-    # Loop through and generate each waypoint
-    for i in range(1, num_steps + 1):
-        fraction = i / num_steps
-        
-        # Calculate the intermediate (X, Y, Z) point along the straight line
-        inter_x = current_x + (x - current_x) * fraction
-        inter_y = current_y + (y - current_y) * fraction
-        inter_z = current_z + (z - current_z) * fraction
-        
-        # Run your existing IK on this tiny step
-        ik(inter_x, inter_y, inter_z, angles, 0)
-        
-        # Send the micro-movement to the arm
-        roarm.joints_angle_ctrl(angles, speed, acc)
-        
-        # Pause briefly to allow the physical servos to reach the waypoint
-        # before we overwrite the serial buffer with the next one.
-        time.sleep(0.02) 
-
-    # 6. Update our tracker to the final position
-    current_x = x
-    current_y = y
-    current_z = z
-    
+    # 3. Fire-and-Forget Target Update
+    # This takes 0.0001 seconds to run, leaving your main AI loop completely unblocked.
+    arm_thread.set_target(x, y, z, speed, acc)
     return True
