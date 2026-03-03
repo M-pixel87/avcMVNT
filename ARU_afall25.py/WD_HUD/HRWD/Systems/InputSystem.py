@@ -325,76 +325,100 @@ import time
 import math
 import numpy as np
 
-# ==============================================================
-# REWORKED AI INPUTS CLASS (Smoother logic & Slower speeds)
-# ==============================================================
 class AI_Inputs:
     def __init__(self, motorSystem, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
-        self.data = {"L": 0, "R": 0}
-        self.target_pos = {"x": 0, "y": 0}
-        self.frame_width = frame_width
-        self.frame_height = frame_height
-        self.driving = False
-        self.active_camera = "bottom" 
+        
+        # ==============================================================
+        # 🛠️ MASTER TUNEABLE CONFIGURATION (Change these as needed)
+        # ==============================================================
+        
+        # --- DRIVE SPEEDS & BEHAVIORS ---
+        self.max_speed = 90          # Max forward speed
+        self.min_speed = 30          # Minimum speed when creeping up to target
+        self.reverse_speed = 30      # Speed when backing up after a grab/drop
+        self.spin_speed = 35         # Speed when rotating to search for targets
+        self.ramming_speed = -50     # Reverse speed when "ramming" to reset distance
+        self.turn_scale = 0.5        # How aggressively it steers towards off-center targets (lower = smoother)
+        self.center_threshold = 50   # Pixel variance allowed before correcting steering
+        
+        # --- DISTANCE & SENSOR THRESHOLDS ---
+        self.slow_start_dist = 1500  # Distance (mm) to start slowing down
+        self.stop_dist = 500         # Distance (mm) to drop to min_speed
+        self.avoidance_zone = 800.0  # Distance (mm) to start shifting away from obstacles
+        self.sensor_stop_max = 52    # Max Ultrasonic sensor distance to stop wheels
+        self.sensor_stop_min = 20    # Min Ultrasonic sensor distance to stop wheels
+        self.cam_stop_ball = 300     # Depth camera distance (mm) to stop for ball
+        self.cam_stop_bucket = 325   # Depth camera distance (mm) to stop for bucket
+        
+        # --- ARM CONFIGURATION & LIMITS ---
+        self.SAFE_HEIGHT = 9         # Safe travel height
+        self.GRAB_HEIGHT = -2.0      # Z-height to grab balls
+        self.DROP_HEIGHT = 16       # Z-height to drop into bucket
+        self.DROP_REACH_X = 14      # Forward X-reach when dropping
+        self.JAW_OPEN = 70           # Servo angle for open claw
+        self.JAW_CLOSED = 10         # Servo angle for closed claw
+        self.GRAB_OFFSET_Y = 4       # Y-axis grab correction
+        self.GRAB_OFFSET_X = 0.0     # X-axis grab correction
+        self.sweep_rate = 0.2        # Speed the arm sweeps side-to-side when searching
+        self.centering_rate = 0.1    # Speed the arm nudges left/right to center on target
+        self.command_delay = 0.1     # Delay between sending arm commands
 
+        # ==============================================================
+        # INTERNAL STATE VARIABLES (Do not change manually)
+        # ==============================================================
+        
+        # Core Systems
         self.motorSystem = motorSystem
-        self.rightActive = True
-        self.leftActive = True
         self.state = state
         self.sensorData = sensorData
+        self.targets = targets
+        self.count = 0
+        self.obstacles = []
+
+        # Frame & Camera tracking
+        self.frame_width = frame_width
+        self.frame_height = frame_height
+        self.active_camera = "bottom"
+        self.camera_fov_deg = 70.0
+        
+        # Position & Distance tracking
+        self.data = {"L": 0, "R": 0}
+        self.target_pos = {"x": 0, "y": 0}
+        self.last_target_x = self.frame_width / 2 
         self.distance_mm = 5000
         self.dist = 5 
+        
+        # Mode & Drive States
         self.mode = 0  
-
+        self.driving = False
+        self.rightActive = True
+        self.leftActive = True
+        self.has_locked_target = False 
+        self.target_visible = False 
+        
+        # Timers & Bypass Logic
         self.bypass_timer = 0
         self.bypass_state = 0 
-        self.last_target_x = self.frame_width / 2 
         self.waypoint_turn_duration = 0.0
         self.waypoint_drive_duration = 0.0
         self.waypoint_turn_dir = 1 
-        
         self.verification_timer = 0
         self.verifying_grab = False
         self.ramming_timer = 0 
-
-        # --- ARM CONFIGURATION ---
-        self.SAFE_HEIGHT = 8  
-        self.GRAB_HEIGHT = -2.0
-        self.DROP_HEIGHT = 15
-        self.DROP_REACH_X = 12  
-        self.JAW_OPEN = 70
-        self.JAW_CLOSED = 10
-        self.GRAB_OFFSET_Y = 4
-        self.GRAB_OFFSET_X = 0.0      
-
-        # --- ARM STATE VARIABLES ---
+        self.reverse_timer = 0  
+        
+        # Arm State Tracking
         self.targetX = 9.0 
         self.targetY = 0.0
         self.targetZ = self.SAFE_HEIGHT
         self.targetJawAngle = self.JAW_OPEN
-        self.reverse_timer = 0  
         self.sweep_dir = 1 
-        
         self.grab_state = 0
         self.state_timer = 0
         self.last_command_time = 0
-        self.command_delay = 0.1 
         self.center_counter = 0 
         self.y_aligned = False 
         self.ball_grabbed = False
-        self.has_locked_target = False 
-        self.target_visible = False 
-
-        self.targets = targets
-        self.count = 0
-        self.obstacles = [] 
-        
-        # --- REWORKED DRIVE PARAMS ---
-        self.center_threshold = 50
-        self.max_speed = 30  # Dropped from 45
-        self.min_speed = 15
-        self.turn_scale = 0.5 # Dropped from 0.7 to soften proportional turning
-        self.camera_fov_deg = 70.0 
 
 
     def update_target(self, bottom_detections, top_detections, depth_frame=None):
@@ -454,7 +478,8 @@ class AI_Inputs:
                 
         self.target_visible = found
         
-        if self.driving and self.has_locked_target:
+        # FIX 1: Only update depth if the target is ACTUALLY visible (Prevents ghosting)
+        if self.driving and self.target_visible:
             if self.active_camera == "bottom" and depth_frame is not None:
                 cx = self.target_pos["x"]
                 cy = self.target_pos["y"]
@@ -475,9 +500,11 @@ class AI_Inputs:
                         self.dist = median_d_val
                         self.distance_mm = median_d_val * 1000
             elif self.active_camera == "top":
-                self.dist = 3.0
-                self.distance_mm = 3000
+                self.dist = 1.0  # Reduced generic distance to 1000mm to prevent ramming
+                self.distance_mm = 1000
 
+        # FIX 3: Safely calculate obstacles ONLY if depth frame exists
+        if depth_frame is not None:
             for obs in self.obstacles:
                 obs_cx = int((obs["bbox"][0] + obs["bbox"][2]) / 2)
                 obs_cy = int((obs["bbox"][1] + obs["bbox"][3]) / 2)
@@ -494,57 +521,60 @@ class AI_Inputs:
                     obs["distance_mm"] = (np.median(valid_obs) * 0.001) * 1000
                 else:
                     obs["distance_mm"] = 9999
+        else:
+            for obs in self.obstacles:
+                obs["distance_mm"] = 9999
 
-            if self.mode == 0 and self.distance_mm < 2500 and self.distance_mm > 0:
-                closest_obstacle_dist = 9999
-                closest_obstacle_x = 0
+        if self.mode == 0 and self.distance_mm < 2500 and self.distance_mm > 0:
+            closest_obstacle_dist = 9999
+            closest_obstacle_x = 0
+            
+            for obs in self.obstacles:
+                obs_x = obs["center"][0]
+                obs_dist = obs["distance_mm"]
+                if abs(obs_x - cx) < 200: 
+                    if obs_dist < closest_obstacle_dist:
+                        closest_obstacle_dist = obs_dist
+                        closest_obstacle_x = obs_x
+            
+            if (closest_obstacle_dist < (self.distance_mm - 200) and closest_obstacle_dist <= 2500):
+                print(f"🛑 Corridor Blocked! Target: {self.distance_mm}mm, Obstacle: {closest_obstacle_dist}mm")
+                pixels_from_center = closest_obstacle_x - (self.frame_width / 2)
+                degrees_per_pixel = self.camera_fov_deg / self.frame_width
+                angle_to_obs = pixels_from_center * degrees_per_pixel
                 
-                for obs in self.obstacles:
-                    obs_x = obs["center"][0]
-                    obs_dist = obs["distance_mm"]
-                    if abs(obs_x - cx) < 200: 
-                        if obs_dist < closest_obstacle_dist:
-                            closest_obstacle_dist = obs_dist
-                            closest_obstacle_x = obs_x
+                angle_rad = math.radians(angle_to_obs)
+                obs_cartesian_x = closest_obstacle_dist * math.cos(angle_rad)
+                obs_cartesian_y = closest_obstacle_dist * math.sin(angle_rad)
                 
-                if (closest_obstacle_dist < (self.distance_mm - 200) and closest_obstacle_dist <= 2500):
-                    print(f"🛑 Corridor Blocked! Target: {self.distance_mm}mm, Obstacle: {closest_obstacle_dist}mm")
-                    pixels_from_center = closest_obstacle_x - (self.frame_width / 2)
-                    degrees_per_pixel = self.camera_fov_deg / self.frame_width
-                    angle_to_obs = pixels_from_center * degrees_per_pixel
+                flank_offset_mm = 450.0 
+                
+                if closest_obstacle_x < cx or abs(closest_obstacle_x - cx) < 30:
+                    waypoint_y = obs_cartesian_y + flank_offset_mm
+                    self.waypoint_turn_dir = 1
+                else:
+                    waypoint_y = obs_cartesian_y - flank_offset_mm
+                    self.waypoint_turn_dir = -1
                     
-                    angle_rad = math.radians(angle_to_obs)
-                    obs_cartesian_x = closest_obstacle_dist * math.cos(angle_rad)
-                    obs_cartesian_y = closest_obstacle_dist * math.sin(angle_rad)
-                    
-                    flank_offset_mm = 450.0 
-                    
-                    if closest_obstacle_x < cx or abs(closest_obstacle_x - cx) < 30:
-                        waypoint_y = obs_cartesian_y + flank_offset_mm
-                        self.waypoint_turn_dir = 1
-                    else:
-                        waypoint_y = obs_cartesian_y - flank_offset_mm
-                        self.waypoint_turn_dir = -1
-                        
-                    waypoint_x = obs_cartesian_x 
-                    dist_to_waypoint = math.hypot(waypoint_x, waypoint_y)
-                    heading_to_waypoint = math.degrees(math.atan2(waypoint_y, waypoint_x))
-                    
-                    max_speed_mm_s = 914.4 / 1.6 
-                    bypass_drive_speed_mm_s = max_speed_mm_s * 0.325 
-                    turn_speed_deg_s = 60.0 # Slowed calculation down to match new drive speeds
-                    
-                    self.waypoint_turn_duration = abs(heading_to_waypoint) / turn_speed_deg_s
-                    self.waypoint_drive_duration = dist_to_waypoint / bypass_drive_speed_mm_s
-                    
-                    self.waypoint_turn_duration = max(0.3, self.waypoint_turn_duration)
-                    self.waypoint_drive_duration = max(0.8, self.waypoint_drive_duration)
-                    
-                    print(f"📍 Waypoint: Turn {self.waypoint_turn_duration:.2f}s, Drive {self.waypoint_drive_duration:.2f}s")
-                    
-                    self.mode = 6 
-                    self.bypass_state = 0 
-                    self.bypass_timer = time.time()
+                waypoint_x = obs_cartesian_x 
+                dist_to_waypoint = math.hypot(waypoint_x, waypoint_y)
+                heading_to_waypoint = math.degrees(math.atan2(waypoint_y, waypoint_x))
+                
+                max_speed_mm_s = 914.4 / 1.6 
+                bypass_drive_speed_mm_s = max_speed_mm_s * 0.325 
+                turn_speed_deg_s = 60.0 
+                
+                self.waypoint_turn_duration = abs(heading_to_waypoint) / turn_speed_deg_s
+                self.waypoint_drive_duration = dist_to_waypoint / bypass_drive_speed_mm_s
+                
+                self.waypoint_turn_duration = max(0.3, self.waypoint_turn_duration)
+                self.waypoint_drive_duration = max(0.8, self.waypoint_drive_duration)
+                
+                print(f"📍 Waypoint: Turn {self.waypoint_turn_duration:.2f}s, Drive {self.waypoint_drive_duration:.2f}s")
+                
+                self.mode = 6 
+                self.bypass_state = 0 
+                self.bypass_timer = time.time()
 
         if not found:
             if self.mode in [1, 2, 3, 6, 7]: 
@@ -566,8 +596,7 @@ class AI_Inputs:
         wanted_label = self.targets[self.count]
 
         if self.mode == 4:
-            # Slower sweep rate (0.2 instead of 0.5)
-            self.targetY += 0.2 * self.sweep_dir
+            self.targetY += self.sweep_rate * self.sweep_dir
             if self.targetY > 12.0: self.sweep_dir = -1
             elif self.targetY < -12.0: self.sweep_dir = 1
             self.targetX = 8.0
@@ -587,12 +616,11 @@ class AI_Inputs:
                     x_c = int((det["bbox"][0] + det["bbox"][2]) / 2)
                     
                     if x_c <= 280:
-                        # Slower centering (0.1 instead of 0.25)
-                        self.targetY += 0.1
+                        self.targetY += self.centering_rate
                         self.center_counter = 0
                         self.y_aligned = False 
                     elif x_c >= 360:
-                        self.targetY -= 0.1
+                        self.targetY -= self.centering_rate
                         self.center_counter = 0
                         self.y_aligned = False
                     else:
@@ -720,7 +748,7 @@ class AI_Inputs:
         
         if self.mode == 7:
             if time.time() - self.ramming_timer < 1.0:
-                return {"L": -50, "R": -50} # Reduced ramming speed
+                return {"L": self.ramming_speed, "R": self.ramming_speed} 
             else:
                 print("Ramming complete. Attempting to re-acquire target...")
                 self.mode = 3
@@ -732,9 +760,9 @@ class AI_Inputs:
             if self.bypass_state == 0:
                 if elapsed < self.waypoint_turn_duration:
                     if self.waypoint_turn_dir == 1:
-                        return {"L": -35, "R": 35} # Reduced bypass turn speed
+                        return {"L": -50, "R": 50} 
                     else:
-                        return {"L": 35, "R": -35} 
+                        return {"L": 50, "R": -50} 
                 else:
                     self.bypass_state = 1
                     self.bypass_timer = time.time()
@@ -742,7 +770,7 @@ class AI_Inputs:
             
             if self.bypass_state == 1:
                 if elapsed < self.waypoint_drive_duration:
-                    return {"L": -35, "R": -35} # Reduced bypass drive speed
+                    return {"L": -50, "R": -50} 
                 else:
                     self.mode = 4 
                     self.driving = True
@@ -751,9 +779,8 @@ class AI_Inputs:
                     return {"L": 0, "R": 0}
 
         if self.mode == 3:
-            if time.time() - self.reverse_timer < 3.0:
-                reverse_speed = 30  # Reduced reverse speed
-                self.data = {"L": reverse_speed, "R": reverse_speed}
+            if time.time() - self.reverse_timer < 2.0:
+                self.data = {"L": self.reverse_speed, "R": self.reverse_speed}
                 return self.data
             else:
                 if self.verifying_grab:
@@ -781,38 +808,34 @@ class AI_Inputs:
                 self.rightActive = True
         
         if self.mode == 4:
-            spin_speed = 35 # Halved spin speed
             if self.last_target_x > (self.frame_width / 2):
-                self.data = {"L": -spin_speed, "R": spin_speed} 
+                self.data = {"L": -self.spin_speed, "R": self.spin_speed} 
             else:
-                self.data = {"L": spin_speed, "R": -spin_speed} 
+                self.data = {"L": self.spin_speed, "R": -self.spin_speed} 
             return self.data
 
         if self.driving and self.mode in [0, 1]:
-            slow_start_dist = 1500 
-            stop_dist = 500        
             
-            if self.distance_mm >= slow_start_dist:
+            if self.distance_mm >= self.slow_start_dist:
                 forward_speed = self.max_speed
-            elif self.distance_mm <= stop_dist:
+            elif self.distance_mm <= self.stop_dist:
                 forward_speed = self.min_speed
                 if self.mode == 0:
                     self.mode = 1 
             else:
-                ratio = (self.distance_mm - stop_dist) / (slow_start_dist - stop_dist)
+                ratio = (self.distance_mm - self.stop_dist) / (self.slow_start_dist - self.stop_dist)
                 forward_speed = self.min_speed + (ratio * (self.max_speed - self.min_speed))
 
             if self.target_visible:
                 target_x = self.target_pos["x"]
                 shift_amount = 0
-                avoidance_zone_mm = 800.0 
                 
                 for obs in self.obstacles:
                     obs_x = obs.get("center", [0, 0])[0]
                     obs_dist = obs.get("distance_mm", 9999)
                     
-                    if obs_dist < avoidance_zone_mm and abs(obs_x - target_x) < 150:
-                        urgency = 1.0 - (obs_dist / avoidance_zone_mm)
+                    if obs_dist < self.avoidance_zone and abs(obs_x - target_x) < 150:
+                        urgency = 1.0 - (obs_dist / self.avoidance_zone)
                         if obs_x < target_x:
                             shift_amount += 250 * urgency 
                         else:
@@ -848,15 +871,20 @@ class AI_Inputs:
                 r_dist, l_dist = 999.0, 999.0
 
             if not self.ball_grabbed:
-                if (r_dist <= 52 and r_dist >= 20) : self.rightActive = False  
-                if (l_dist <= 52 and l_dist >= 20) : self.leftActive = False   
-                if((self.distance_mm <= 250 and self.distance_mm != 0)):
+                if (r_dist <= self.sensor_stop_max and r_dist >= self.sensor_stop_min) : self.rightActive = False  
+                if (l_dist <= self.sensor_stop_max and l_dist >= self.sensor_stop_min) : self.leftActive = False   
+                if((self.distance_mm <= self.cam_stop_ball and self.distance_mm != 0)):
                      self.leftActive = False 
                      self.rightActive = False
-            
+            #blind drive towards the bucket
             else:
-                if self.distance_mm <= 200 and self.distance_mm != 0:
+                if self.distance_mm <= self.cam_stop_bucket and self.distance_mm != 0:
                      self.leftActive = False 
+                     self.rightActive = False
+                # FIX 2: Coast to a stop if we lose the bucket but were getting close
+                elif not self.target_visible and self.distance_mm < 450:
+                     print("Bucket in blind spot! Coasting to stop...")
+                     self.leftActive = False
                      self.rightActive = False
             
             if not self.rightActive and not self.leftActive:
