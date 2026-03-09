@@ -335,9 +335,9 @@ class AI_Inputs:
         # --- DRIVE SPEEDS & BEHAVIORS ---
         self.max_speed = 90          # Max forward speed
         self.min_speed = 30          # Minimum speed when creeping up to target
-        self.reverse_speed = 30      # Speed when backing up after a grab/drop
+        self.reverse_speed = 60      # Speed when backing up after a grab/drop
         self.spin_speed = 35         # Speed when rotating to search for targets
-        self.ramming_speed = -50     # Reverse speed when "ramming" to reset distance
+        self.ramming_speed = -60     # Reverse speed when "ramming" to reset distance
         self.turn_scale = 0.5        # How aggressively it steers towards off-center targets (lower = smoother)
         self.center_threshold = 50   # Pixel variance allowed before correcting steering
         
@@ -345,16 +345,16 @@ class AI_Inputs:
         self.slow_start_dist = 1500  # Distance (mm) to start slowing down
         self.stop_dist = 500         # Distance (mm) to drop to min_speed
         self.avoidance_zone = 800.0  # Distance (mm) to start shifting away from obstacles
-        self.sensor_stop_max = 52    # Max Ultrasonic sensor distance to stop wheels
-        self.sensor_stop_min = 20    # Min Ultrasonic sensor distance to stop wheels
+        self.sensor_stop_max = 10    # Max Ultrasonic sensor distance to stop wheels
+        self.sensor_stop_min = 9    # Min Ultrasonic sensor distance to stop wheels
         self.cam_stop_ball = 300     # Depth camera distance (mm) to stop for ball
-        self.cam_stop_bucket = 400   # Depth camera distance (mm) to stop for bucket
+        self.cam_stop_bucket = 275   # Depth camera distance (mm) to stop for bucket
         
         # --- ARM CONFIGURATION & LIMITS ---
         self.SAFE_HEIGHT = 7         # Safe travel height
         self.GRAB_HEIGHT = -2.0      # Z-height to grab balls
         self.DROP_HEIGHT = 16        # Z-height to drop into bucket
-        self.DROP_REACH_X = 14       # Forward X-reach when dropping
+        self.DROP_REACH_X = 16       # Forward X-reach when dropping
         self.JAW_OPEN = 70           # Servo angle for open claw
         self.JAW_CLOSED = 10         # Servo angle for closed claw
         self.GRAB_OFFSET_Y = 4       # Y-axis grab correction
@@ -372,7 +372,7 @@ class AI_Inputs:
         self.state = state
         self.sensorData = sensorData
         self.targets = targets
-        self.count = 1
+        self.count = 0
         self.obstacles = []
 
         # Frame & Camera tracking
@@ -429,6 +429,14 @@ class AI_Inputs:
             self.target_visible = False
             return
             
+        # ==============================================================
+        # 🛑 HARD KILL-SWITCH FOR FOREARM CAMERA
+        # If we are grabbing (mode 2), backing up/verifying (mode 3), 
+        # or holding the ball, completely ignore the top camera feed.
+        # ==============================================================
+        if self.ball_grabbed or self.mode in [2, 3] or self.verifying_grab:
+            top_detections = [] 
+            
         if(self.ball_grabbed == False):
             wanted_label = self.targets[self.count]
         else:
@@ -454,9 +462,9 @@ class AI_Inputs:
                 elif "ball" in det["label"].lower() and det["label"].lower() != wanted_label.lower():
                     self.obstacles.append(det)
 
-        # <--- FIX: ONLY fall back to top camera if we are NOT carrying a ball.
-        # This prevents the robot from mistaking the ball in its claw for the bucket!
-        if target_det is None and top_detections and not self.ball_grabbed:
+        # Clean, simple fallback. We don't need complicated logic here anymore 
+        # because top_detections is safely empty whenever the arm is occupied.
+        if target_det is None and top_detections:
             for det in top_detections:
                 if det["label"].lower() == wanted_label.lower():
                     target_det = det
@@ -780,7 +788,7 @@ class AI_Inputs:
                     self.center_counter = 0
                     self.y_aligned = False 
                     self.dist = 0
-                    
+                    self.distance_mm = 5000
                     self.mode = 3  
                     self.reverse_timer = current_time
                     
@@ -952,7 +960,7 @@ class AI_Inputs:
                      self.rightActive = False
                 
                 # 2. VISUAL KILLSWITCH
-                elif getattr(self, "target_height", 0) > (self.frame_height * 0.75):
+                elif getattr(self, "target_height", 0) > (self.frame_height * 0.99):
                      print("Bucket filling camera frame! Visual Killswitch Activated.")
                      self.leftActive = False
                      self.rightActive = False
