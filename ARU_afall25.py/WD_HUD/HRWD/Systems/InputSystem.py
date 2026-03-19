@@ -44,7 +44,8 @@ class AI:
 # Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine', conf_threshold=0.3):
+    #'/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine'
+    def __init__(self, model_path='/home/uafs/Downloads/weights(2).engine', conf_threshold=0.3):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
@@ -103,7 +104,7 @@ class AI_YOLO:
         cv2.destroyAllWindows()
         print("🧹 YOLO resources released.")
 
-#Use for intel D435i Realsense camera module
+# Use for intel D435i Realsense camera module
 class intelCamera:
     def __init__(self, width=640, height=480, fps=30):
         self.width = width
@@ -117,8 +118,11 @@ class intelCamera:
         self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
         self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
         
-        self.profile = self.pipeline.start(self.config)
-        print(f"✅ Intel RealSense initialized [{width}x{height} @ {fps} FPS]")
+        try:
+            self.profile = self.pipeline.start(self.config)
+            print(f"✅ Intel RealSense initialized [{width}x{height} @ {fps} FPS]")
+        except Exception as e:
+            print(f"❌ Initial Intel Cam startup failed: {e}")
 
         self.thread = threading.Thread(target=self.update, args=())
         self.thread.daemon = True
@@ -127,7 +131,8 @@ class intelCamera:
     def update(self):
         while not self.stopped:
             try:
-                frames = self.pipeline.wait_for_frames()
+                # Added a 1000ms timeout to prevent hanging
+                frames = self.pipeline.wait_for_frames(timeout_ms=1000)
                 depth_frame = frames.get_depth_frame()
                 color_frame = frames.get_color_frame()
                 
@@ -135,17 +140,36 @@ class intelCamera:
                     d_img = np.asanyarray(depth_frame.get_data())
                     c_img = np.asanyarray(color_frame.get_data())
                     self.frame_data = (d_img, c_img)
+                    
             except Exception as e:
-                print(f"Intel Cam Error: {e}")
+                # THE FIX: If it drops, stop spinning and try to recover!
+                print(f"⚠️ Intel Cam Error: {e} | Attempting hardware recovery...")
+                time.sleep(2) # Prevents the CPU-crashing death loop
+                
+                try:
+                    self.pipeline.stop() # Clear the dead pipeline
+                except:
+                    pass 
+                    
+                try:
+                    self.pipeline.start(self.config) # Attempt to restart
+                    print("✅ Intel Cam successfully recovered!")
+                except Exception as reset_e:
+                    print(f"❌ Recovery failed: {reset_e}")
 
     def get_frames(self):
         return self.frame_data
 
     def release(self):
         self.stopped = True
-        self.thread.join()
-        self.pipeline.stop()
-        print("Intel RealSense released.")
+        if hasattr(self, 'thread') and self.thread.is_alive():
+            self.thread.join()
+        try:
+            self.pipeline.stop()
+        except:
+            pass
+        print("🧹 Intel RealSense released.")
+        
 
 
 class cvWebcam:
