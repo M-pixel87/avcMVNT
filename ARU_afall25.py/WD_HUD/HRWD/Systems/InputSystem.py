@@ -44,8 +44,7 @@ class AI:
 # Optimized YOLO (TensorRT) Inference Class                    
 # ==============================================================
 class AI_YOLO:
-    #'/home/uafs/Downloads/YOLO-inferenceHR/runs/detect/brokeback_mountain/weights/best.engine'
-    def __init__(self, model_path='/home/uafs/Downloads/weights(2).engine', conf_threshold=0.3):
+    def __init__(self, model_path='/home/uafs/Downloads/weights(3).engine', conf_threshold=0.3):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
@@ -106,7 +105,7 @@ class AI_YOLO:
 
 # Use for intel D435i Realsense camera module
 class intelCamera:
-    def __init__(self, width=640, height=480, fps=30):
+    def __init__(self, width=640, height=480, fps=15):
         self.width = width
         self.height = height
         self.fps = fps
@@ -131,7 +130,6 @@ class intelCamera:
     def update(self):
         while not self.stopped:
             try:
-                # Added a 1000ms timeout to prevent hanging
                 frames = self.pipeline.wait_for_frames(timeout_ms=1000)
                 depth_frame = frames.get_depth_frame()
                 color_frame = frames.get_color_frame()
@@ -142,17 +140,16 @@ class intelCamera:
                     self.frame_data = (d_img, c_img)
                     
             except Exception as e:
-                # THE FIX: If it drops, stop spinning and try to recover!
                 print(f"⚠️ Intel Cam Error: {e} | Attempting hardware recovery...")
-                time.sleep(2) # Prevents the CPU-crashing death loop
+                time.sleep(2)
                 
                 try:
-                    self.pipeline.stop() # Clear the dead pipeline
+                    self.pipeline.stop()
                 except:
                     pass 
                     
                 try:
-                    self.pipeline.start(self.config) # Attempt to restart
+                    self.pipeline.start(self.config)
                     print("✅ Intel Cam successfully recovered!")
                 except Exception as reset_e:
                     print(f"❌ Recovery failed: {reset_e}")
@@ -341,57 +338,45 @@ class XboxController:
         return [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())] if self.connected else [0]
 
 
-# ==============================================================
-# FIXED AI INPUTS CLASS (Final: Grab Verification & Ramming Speed)
-# ==============================================================
-from Arm import CoOrdinateBaseSys as Arm
-import time
-import math
-import numpy as np
-
 class AI_Inputs:
     def __init__(self, motorSystem, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
         
-        # ==============================================================
-        # 🛠️ MASTER TUNEABLE CONFIGURATION (Change these as needed)
-        # ==============================================================
-        
         # --- DRIVE SPEEDS & BEHAVIORS ---
-        self.max_speed = 90          # Max forward speed
-        self.min_speed = 30          # Minimum speed when creeping up to target
-        self.reverse_speed = 60      # Speed when backing up after a grab/drop
-        self.spin_speed = 35         # Speed when rotating to search for targets
-        self.ramming_speed = -60     # Reverse speed when "ramming" to reset distance
-        self.turn_scale = 0.5        # How aggressively it steers towards off-center targets (lower = smoother)
-        self.center_threshold = 50   # Pixel variance allowed before correcting steering
+        self.max_speed = 90          
+        self.min_speed = 30          
+        self.reverse_speed = 60      
+        self.spin_speed = 29         
+        self.ramming_speed = -60     
+        self.turn_scale = 0.5        
+        self.center_threshold = 50   
         
         # --- DISTANCE & SENSOR THRESHOLDS ---
-        self.slow_start_dist = 1500  # Distance (mm) to start slowing down
-        self.stop_dist = 500         # Distance (mm) to drop to min_speed
-        self.avoidance_zone = 800.0  # Distance (mm) to start shifting away from obstacles
-        self.sensor_stop_max = 10    # Max Ultrasonic sensor distance to stop wheels
-        self.sensor_stop_min = 9    # Min Ultrasonic sensor distance to stop wheels
-        self.cam_stop_ball = 300     # Depth camera distance (mm) to stop for ball
-        self.cam_stop_bucket = 275   # Depth camera distance (mm) to stop for bucket
+        self.slow_start_dist = 800   
+        self.stop_dist = 300         
+        self.avoidance_zone = 800.0  
+        self.sensor_stop_max = 10    
+        self.sensor_stop_min = 9     
+        self.cam_stop_ball = 300     
+        self.cam_stop_bucket = 275   
+        
+        # --- WANDER / EXPLORE SETTINGS ---
+        self.search_timeout = 8.0    
+        self.wander_duration = 3.0   
         
         # --- ARM CONFIGURATION & LIMITS ---
-        self.SAFE_HEIGHT = 7         # Safe travel height
-        self.GRAB_HEIGHT = -2.0      # Z-height to grab balls
-        self.DROP_HEIGHT = 16        # Z-height to drop into bucket
-        self.DROP_REACH_X = 16       # Forward X-reach when dropping
-        self.JAW_OPEN = 70           # Servo angle for open claw
-        self.JAW_CLOSED = 10         # Servo angle for closed claw
-        self.GRAB_OFFSET_Y = 4       # Y-axis grab correction
-        self.GRAB_OFFSET_X = 0.0     # X-axis grab correction
-        self.sweep_rate = 0.2        # Speed the arm sweeps side-to-side when searching
-        self.centering_rate = 0.1    # Speed the arm nudges left/right to center on target
-        self.command_delay = 0.1     # Delay between sending arm commands
+        self.SAFE_HEIGHT = 7         
+        self.GRAB_HEIGHT = -2.0      
+        self.DROP_HEIGHT = 16        
+        self.DROP_REACH_X = 16       
+        self.JAW_OPEN = 70           
+        self.JAW_CLOSED = 10         
+        self.GRAB_OFFSET_Y = 4       
+        self.GRAB_OFFSET_X = 0.0     
+        self.sweep_rate = 0.2        
+        self.centering_rate = 0.1    
+        self.command_delay = 0.1     
 
-        # ==============================================================
-        # INTERNAL STATE VARIABLES (Do not change manually)
-        # ==============================================================
-        
-        # Core Systems
+        # --- INTERNAL STATE VARIABLES ---
         self.motorSystem = motorSystem
         self.state = state
         self.sensorData = sensorData
@@ -399,20 +384,17 @@ class AI_Inputs:
         self.count = 0
         self.obstacles = []
 
-        # Frame & Camera tracking
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.active_camera = "bottom"
         self.camera_fov_deg = 70.0
         
-        # Position & Distance tracking
         self.data = {"L": 0, "R": 0}
         self.target_pos = {"x": 0, "y": 0}
         self.last_target_x = self.frame_width / 2 
         self.distance_mm = 5000
         self.dist = 5 
         
-        # Mode & Drive States
         self.mode = 0  
         self.driving = False
         self.rightActive = True
@@ -420,7 +402,6 @@ class AI_Inputs:
         self.has_locked_target = False 
         self.target_visible = False 
         
-        # Timers & Bypass Logic
         self.bypass_timer = 0
         self.bypass_state = 0 
         self.waypoint_turn_duration = 0.0
@@ -431,7 +412,10 @@ class AI_Inputs:
         self.ramming_timer = 0 
         self.reverse_timer = 0  
         
-        # Arm State Tracking
+        self.search_timer = 0
+        self.wander_timer = 0
+        self.wander_target_x = self.frame_width / 2
+        
         self.targetX = 9.0 
         self.targetY = 0.0
         self.targetZ = self.SAFE_HEIGHT
@@ -443,8 +427,7 @@ class AI_Inputs:
         self.center_counter = 0 
         self.y_aligned = False 
         self.ball_grabbed = False
-        self.lost_target_timer = 0  
-
+        self.lost_target_timer = 0
 
     def update_target(self, bottom_detections, top_detections, depth_frame=None):
         if self.count >= len(self.targets):
@@ -453,11 +436,6 @@ class AI_Inputs:
             self.target_visible = False
             return
             
-        # ==============================================================
-        # 🛑 HARD KILL-SWITCH FOR FOREARM CAMERA
-        # If we are grabbing (mode 2), backing up/verifying (mode 3), 
-        # or holding the ball, completely ignore the top camera feed.
-        # ==============================================================
         if self.ball_grabbed or self.mode in [2, 3] or self.verifying_grab:
             top_detections = [] 
             
@@ -480,14 +458,13 @@ class AI_Inputs:
 
         if bottom_detections:
             for det in bottom_detections:
-                if det["label"].lower() == wanted_label.lower():
+                label_lower = det["label"].lower()
+                if label_lower == wanted_label.lower():
                     target_det = det
                     self.active_camera = "bottom"
-                elif "ball" in det["label"].lower() and det["label"].lower() != wanted_label.lower():
+                elif ("ball" in label_lower or "bucket" in label_lower) and label_lower != wanted_label.lower():
                     self.obstacles.append(det)
 
-        # Clean, simple fallback. We don't need complicated logic here anymore 
-        # because top_detections is safely empty whenever the arm is occupied.
         if target_det is None and top_detections:
             for det in top_detections:
                 if det["label"].lower() == wanted_label.lower():
@@ -500,7 +477,6 @@ class AI_Inputs:
             cy = int((target_det["bbox"][1] + target_det["bbox"][3]) / 2)
             
             self.target_height = target_det["bbox"][3] - target_det["bbox"][1]
-            
             self.target_pos["x"] = cx
             self.target_pos["y"] = cy
             self.last_target_x = cx 
@@ -509,18 +485,14 @@ class AI_Inputs:
             found = True
             self.has_locked_target = True 
             
-            if self.mode == 4 or self.mode == 1:
+            if self.mode in [1, 4, 8]:
                 print(f"👀 Target spotted via {self.active_camera} camera! Tracking {wanted_label}...")
                 self.mode = 0
+                self.search_timer = 0 
                 
         self.target_visible = found
         
-        # ==============================================================
-        # REWORKED ROBUST LIDAR CALCULATION
-        # ==============================================================
         if self.driving and depth_frame is not None:
-            
-            # 1. Standard Lidar Tracking (We clearly see the object)
             if self.target_visible and self.active_camera == "bottom":
                 cx_safe = self.target_pos["x"]
                 cy_safe = self.target_pos["y"]
@@ -541,15 +513,12 @@ class AI_Inputs:
                         self.dist = median_d_val
                         self.distance_mm = median_d_val * 1000
 
-            # 2. BLIND LIDAR OVERRIDE: We lost the bucket, but we are extremely close (Mode 1).
-            # Use the LAST KNOWN center of the bucket to sample the physical body!
             elif self.ball_grabbed and self.mode == 1:
                 last_cx = self.target_pos["x"]
                 last_cy = self.target_pos["y"]
                 
-                # Create a large depth patch directly around the bucket's last known center
-                patch_w = 100  # 200 pixels wide
-                patch_h = 60   # 120 pixels tall
+                patch_w = 100  
+                patch_h = 60   
                 
                 y_min = max(0, int(last_cy - patch_h))
                 y_max = min(self.frame_height, int(last_cy + patch_h))
@@ -557,23 +526,18 @@ class AI_Inputs:
                 x_max = min(self.frame_width, int(last_cx + patch_w))
                 
                 depth_patch = depth_frame[y_min:y_max, x_min:x_max]
-                
-                # Filter out the far background wall (anything past 1.5 meters)
                 valid_depths = depth_patch[(depth_patch > 0) & (depth_patch < 1500)]
                 
                 if valid_depths.size > 0:
-                    # Since we are looking dead-center at the bucket body, the median is perfect
                     body_dist = np.median(valid_depths) * 0.001
                     if body_dist > 0.05: 
                         self.dist = body_dist
                         self.distance_mm = body_dist * 1000
 
-            # 3. Top Camera Fallback (Only applied if tracking a ball from far away)
             elif self.active_camera == "top":
                 self.dist = 1.5  
                 self.distance_mm = 1500
 
-        # Safely calculate obstacles ONLY if depth frame exists
         if depth_frame is not None:
             for obs in self.obstacles:
                 obs_cx = int((obs["bbox"][0] + obs["bbox"][2]) / 2)
@@ -598,7 +562,6 @@ class AI_Inputs:
         if self.mode == 0 and self.distance_mm < 2500 and self.distance_mm > 0:
             closest_obstacle_dist = 9999
             closest_obstacle_x = 0
-            
             current_target_x = self.target_pos["x"]
             
             for obs in self.obstacles:
@@ -649,7 +612,7 @@ class AI_Inputs:
                 self.bypass_timer = time.time()
 
         if not found:
-            if self.mode in [1, 2, 3, 6, 7]: 
+            if self.mode in [1, 2, 3, 6, 7, 8]: 
                 pass 
             elif self.driving and self.distance_mm < 1200 and self.has_locked_target and self.mode == 0:
                 self.mode = 1
@@ -659,7 +622,6 @@ class AI_Inputs:
                 self.driving = True
                 self.has_locked_target = False
 
-
     def update_arm_logic(self, webcam_detections):
         if self.count >= len(self.targets):
             return 
@@ -668,17 +630,20 @@ class AI_Inputs:
         wanted_label = self.targets[self.count]
 
         if self.mode == 4:
-            self.targetY += self.sweep_rate * self.sweep_dir
-            if self.targetY > 12.0: self.sweep_dir = -1
-            elif self.targetY < -12.0: self.sweep_dir = 1
+            # FIXED: Only sweep the arm if we are searching for a ball!
+            if not self.ball_grabbed:
+                self.targetY += self.sweep_rate * self.sweep_dir
+                if self.targetY > 12.0: self.sweep_dir = -1
+                elif self.targetY < -12.0: self.sweep_dir = 1
+            else:
+                self.targetY = 0.0 # Stay locked in the center
+                
             self.targetX = 8.0
-            # Keep arm raised to DROP_HEIGHT if carrying a ball
             self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
             
         elif self.mode in [0, 1]:
             self.targetY = 0.0
             self.targetX = 9.0
-            # Keep arm raised to DROP_HEIGHT if carrying a ball
             self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
 
         if self.mode == 2 and self.grab_state == 0:
@@ -701,11 +666,10 @@ class AI_Inputs:
                     else:
                         centered_this_frame = True
 
-            # RAM AND RETRY TIMEOUT logic
             if not webcam_sees_target and not self.ball_grabbed:
                 if self.lost_target_timer == 0:
-                    self.lost_target_timer = current_time # Start the clock
-                elif current_time - self.lost_target_timer > 3.0: # 3 seconds passed
+                    self.lost_target_timer = current_time 
+                elif current_time - self.lost_target_timer > 3.0: 
                     print("⚠️ Ball lost during pickup! Ramming to reset...")
                     self.mode = 7
                     self.ramming_timer = current_time
@@ -717,9 +681,9 @@ class AI_Inputs:
                     self.driving = True
                     self.leftActive = True
                     self.rightActive = True
-                    return # Exit the function so we can ram immediately
+                    return 
             else:
-                self.lost_target_timer = 0 # Reset timer if we see the ball
+                self.lost_target_timer = 0 
             
             if webcam_sees_target:
                 if centered_this_frame:
@@ -903,14 +867,51 @@ class AI_Inputs:
                 self.rightActive = True
         
         if self.mode == 4:
+            if self.search_timer == 0:
+                self.search_timer = time.time()
+            elif time.time() - self.search_timer > self.search_timeout:
+                print("🔄 Search timeout! Initiating wander protocol...")
+                self.mode = 8
+                self.search_timer = 0
+                self.wander_timer = time.time()
+                self.wander_target_x = self.frame_width / 2 
+                
+                for obs in self.obstacles:
+                    obs_label = obs["label"].lower()
+                    if self.ball_grabbed and "bucket" in obs_label:
+                        self.wander_target_x = obs["center"][0]
+                        break
+                    elif not self.ball_grabbed and "ball" in obs_label:
+                        self.wander_target_x = obs["center"][0]
+                        break
+
             if self.last_target_x > (self.frame_width / 2):
                 self.data = {"L": -self.spin_speed, "R": self.spin_speed} 
             else:
                 self.data = {"L": self.spin_speed, "R": -self.spin_speed} 
             return self.data
+            
+        if self.mode == 8:
+            if time.time() - self.wander_timer < self.wander_duration:
+                error = self.wander_target_x - (self.frame_width / 2)
+                turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
+                base_spd = self.max_speed * 0.75 
+                
+                if error > 0:
+                    left_s = base_spd
+                    right_s = base_spd * (1 - turn_amount)
+                else:
+                    left_s = base_spd * (1 + turn_amount)
+                    right_s = base_spd
+                    
+                return {"L": int(-max(0, left_s)), "R": int(-max(0, right_s))}
+            else:
+                print("🛑 Wander complete. Spinning to search again...")
+                self.mode = 4
+                self.search_timer = time.time()
+                return {"L": 0, "R": 0}
 
         if self.driving and self.mode in [0, 1]:
-            
             if self.distance_mm >= self.slow_start_dist:
                 forward_speed = self.max_speed
             elif self.distance_mm <= self.stop_dist:
@@ -972,18 +973,15 @@ class AI_Inputs:
                      self.leftActive = False 
                      self.rightActive = False
             
-            # blind drive towards the bucket
             else:
                 if (r_dist <= self.sensor_stop_max and r_dist >= self.sensor_stop_min) : self.rightActive = False  
                 if (l_dist <= self.sensor_stop_max and l_dist >= self.sensor_stop_min) : self.leftActive = False 
                 
-                # 1. Standard / Blind Lidar Depth Stop
                 if self.distance_mm <= self.cam_stop_bucket and self.distance_mm != 0:
                      print(f"Lidar Stop Triggered at {self.distance_mm}mm")
                      self.leftActive = False 
                      self.rightActive = False
                 
-                # 2. VISUAL KILLSWITCH
                 elif getattr(self, "target_height", 0) > (self.frame_height * 0.99):
                      print("Bucket filling camera frame! Visual Killswitch Activated.")
                      self.leftActive = False
@@ -999,12 +997,12 @@ class AI_Inputs:
         if not self.leftActive or not self.driving or self.mode == 2: 
             left_speed = 0
         else: 
-            left_speed = max(self.min_speed, min(left_speed, self.max_speed)) * -1
+            left_speed = max(0, min(left_speed, self.max_speed)) * -1
 
         if not self.rightActive or not self.driving or self.mode == 2: 
             right_speed = 0
         else: 
-            right_speed = max(self.min_speed, min(right_speed, self.max_speed)) * -1
+            right_speed = max(0, min(right_speed, self.max_speed)) * -1
 
         self.data = {"L": int(left_speed), "R": int(right_speed)}
         return self.data

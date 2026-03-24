@@ -4,11 +4,6 @@ import time
 class sensorSystem:
     def __init__(self, ser):
         self.ser = ser
-        
-        # ==============================================================
-        # 🛠️ HARDWARE TOGGLE: Set to True while sensors are unplugged!
-        # This prevents the "ghost obstacles" from stopping the robot.
-        # ==============================================================
         self.IGNORE_ULTRASONICS = True 
         
         # Initialize with default safe values
