@@ -156,7 +156,7 @@ def move_joint(joint_index, angle, speed=450, acc=250):
     arm_thread.trigger_joint_update(speed, acc)
     return True
 
-def move_arm_to(x, y, z, speed=300, acc=250):
+def move_arm_to(x, y, z, speed=400, acc=300):
     arm1 = 10
     arm2 = 14
     max_reach = arm1 + arm2

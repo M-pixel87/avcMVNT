@@ -1,6 +1,7 @@
 import os
 import time
 import torch
+import math
 import numpy as np
 from ultralytics import YOLO
 import jetson_inference
@@ -12,44 +13,29 @@ from Systems.mode_State import modeState
 import pyrealsense2 as rs
 import threading
 
-# Headless mode setup
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["LD_PRELOAD"] = "/usr/lib/aarch64-linux-gnu/libgomp.so.1"
 
-# ==============================================================
-# ORIGINAL LEGACY AI CLASS (Jetson Inference)
-# ==============================================================
 class AI:
     def __init__(self):
         self.net = jetson_inference.detectNet(
             model="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_jone/ssd-mobilenet.onnx",
             labels="/home/uafs/Downloads/jetson-inference/python/training/detection/ssd/models/test_jone/labels.txt",
-            input_blob="input_0",
-            output_cvg="scores",
-            output_bbox="boxes",
-            threshold=0.5)
+            input_blob="input_0", output_cvg="scores", output_bbox="boxes", threshold=0.5)
 
     def detect(self, img):
-        if(img):
+        if img:
             detections = self.net.Detect(img)
             if detections:
                 for detect in detections:
-                    ID = detect.ClassID
-                    w = detect.Right - detect.Left
-                    print(f'Width of object: {w}')
-        else:
-            pass
+                    print(f'Width of object: {detect.Right - detect.Left}')
 
-# ==============================================================
-# Optimized YOLO (TensorRT) Inference Class                    
-# ==============================================================
 class AI_YOLO:
-    def __init__(self, model_path='/home/uafs/Downloads/weights(3).engine', conf_threshold=0.3):
+    def __init__(self, model_path='/home/uafs/Downloads/weights(3).engine', conf_threshold=0.5):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.model = None
         self.class_names = {}
-
         try:
             print(f"🔍 Loading YOLO TensorRT model from: {model_path}")
             self.model = YOLO(model_path)
@@ -57,74 +43,46 @@ class AI_YOLO:
             print(f"✅ Model loaded successfully ({len(self.class_names)} classes).")
         except Exception as e:
             print(f"❌ Error loading YOLO model: {e}")
-            print("ensure the .engine file exists")
             self.model = None
 
     def detect(self, frame, display=False):
-        if self.model is None or frame is None:
-            return []
-
+        if self.model is None or frame is None: return []
         results = self.model(frame, verbose=False)
         detections = []
-        frame_width = frame.shape[1]
-
         for result in results:
             for box in result.boxes:
                 conf = float(box.conf[0])
-                if conf < self.conf_threshold:
-                    continue
-
+                if conf < self.conf_threshold: continue
                 x1, y1, x2, y2 = map(float, box.xyxy[0])
                 cls_id = int(box.cls[0])
                 label = self.class_names.get(cls_id, f"class_{cls_id}")
-
-                center_x = (x1 + x2) / 2
-                center_y = (y1 + y2) / 2
-                box_width = x2 - x1
-
                 detections.append({
-                    "class_id": cls_id,
-                    "label": label,
-                    "confidence": conf,
+                    "class_id": cls_id, "label": label, "confidence": conf,
                     "bbox": (int(x1), int(y1), int(x2), int(y2)),
-                    "center": (int(center_x), int(center_y)),
-                    "width": int(box_width)
+                    "center": (int((x1+x2)/2), int((y1+y2)/2)),
+                    "width": int(x2 - x1)
                 })
-
-        if display:
-            annotated_frame = results[0].plot()
-            cv2.imshow("YOLO TensorRT Inference", annotated_frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                return "quit"
-
         return detections
 
     def release(self):
         cv2.destroyAllWindows()
-        print("🧹 YOLO resources released.")
 
-# Use for intel D435i Realsense camera module
 class intelCamera:
     def __init__(self, width=640, height=480, fps=15):
-        self.width = width
-        self.height = height
-        self.fps = fps
+        self.width, self.height, self.fps = width, height, fps
         self.stopped = False
         self.frame_data = (None, None) 
-
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
         self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
-        
         try:
             self.profile = self.pipeline.start(self.config)
             print(f"✅ Intel RealSense initialized [{width}x{height} @ {fps} FPS]")
         except Exception as e:
             print(f"❌ Initial Intel Cam startup failed: {e}")
 
-        self.thread = threading.Thread(target=self.update, args=())
-        self.thread.daemon = True
+        self.thread = threading.Thread(target=self.update, daemon=True)
         self.thread.start()
 
     def update(self):
@@ -133,52 +91,33 @@ class intelCamera:
                 frames = self.pipeline.wait_for_frames(timeout_ms=1000)
                 depth_frame = frames.get_depth_frame()
                 color_frame = frames.get_color_frame()
-                
                 if depth_frame and color_frame:
                     d_img = np.asanyarray(depth_frame.get_data())
                     c_img = np.asanyarray(color_frame.get_data())
                     self.frame_data = (d_img, c_img)
-                    
             except Exception as e:
                 print(f"⚠️ Intel Cam Error: {e} | Attempting hardware recovery...")
-                time.sleep(2)
-                
-                try:
-                    self.pipeline.stop()
-                except:
-                    pass 
-                    
+                cv2.waitKey(2000) 
+                try: self.pipeline.stop()
+                except: pass 
                 try:
                     self.pipeline.start(self.config)
                     print("✅ Intel Cam successfully recovered!")
                 except Exception as reset_e:
                     print(f"❌ Recovery failed: {reset_e}")
 
-    def get_frames(self):
-        return self.frame_data
-
+    def get_frames(self): return self.frame_data
     def release(self):
         self.stopped = True
-        if hasattr(self, 'thread') and self.thread.is_alive():
-            self.thread.join()
-        try:
-            self.pipeline.stop()
-        except:
-            pass
-        print("🧹 Intel RealSense released.")
-        
-
+        try: self.pipeline.stop()
+        except: pass
 
 class cvWebcam:
     def __init__(self, cam_id=0, width=640, height=480, fps=30):
-        self.cam_id = cam_id
-        self.width = width
-        self.height = height
+        self.cam_id, self.width, self.height = cam_id, width, height
         self.stopped = False
         self.grabbed = False
         self.frame = None
-
-        path = f"/dev/video{cam_id}"
         self.camera = cv2.VideoCapture(cam_id, cv2.CAP_V4L2)
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -186,97 +125,35 @@ class cvWebcam:
         self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         if self.camera.isOpened():
-            print(f"✅ cvWebcam threaded on {path}")
+            print(f"✅ cvWebcam threaded on /dev/video{cam_id}")
             self.grabbed, self.frame = self.camera.read()
-            self.thread = threading.Thread(target=self.update, args=())
-            self.thread.daemon = True
+            self.thread = threading.Thread(target=self.update, daemon=True)
             self.thread.start()
         else:
             print(f"❌ Failed to open cvWebcam {cam_id}")
 
     def update(self):
         while not self.stopped:
-            if not self.camera.isOpened():
-                break
+            if not self.camera.isOpened(): break
             grabbed, frame = self.camera.read()
             if grabbed:
                 self.grabbed = grabbed
                 self.frame = frame
 
-    def get_frame(self):
-        return self.frame
-
+    def get_frame(self): return self.frame
     def release(self):
         self.stopped = True
-        self.thread.join()
         self.camera.release()
-        print("cvWebcam released.")
 
-class Webcam:
-    def __init__(self, cam_id=0, width=640, height=480):
-        self.cam_id = cam_id
-        self.width = width
-        self.height = height
-        self.camera = None  
-        self.display = None
-
-        try:
-            self.display = jetson_utils.videoOutput(
-                "display://0",
-                argv=[f"--output-width={width}", f"--output-height={height}"]
-            )
-        except Exception as e:
-            self.display = None
-
-        try:
-            path = f"/dev/video{cam_id}"
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"No device at {path}")
-
-            self.camera = jetson_utils.videoSource(
-                path,
-                argv=[f"--input-width={width}", f"--input-height={height}"]
-            )
-            print(f"✅ Camera initialized on {path}")
-        except Exception as e:
-            self.camera = None
-
-    def get_frame(self):
-        if self.camera is None:
-            return None
-        try:
-            return self.camera.Capture()
-        except Exception as e:
-            return None
-
-    def show_frame(self, img):
-        if self.display is not None and img is not None:
-            self.display.Render(img)
-            self.display.SetStatus("Webcam Stream")
-        elif self.display is not None:
-            self.display.SetStatus("No Camera Feed")
-
-    def release(self):
-        if self.camera is not None:
-            self.camera.Close()
-        if self.display is not None:
-            self.display.Close()
-
-# ==============================================================
-# FIXED CONTROLLER CLASS
-# ==============================================================
 class XboxController:
     def __init__(self, state: modeState , deadzone=0.05):
         self.deadzone = deadzone
         self.data = {"L": 0, "R": 0, "buttons": []}
         self.mode = 0
         self.state = state
-
         self.x, self.y, self.z = 10, 0, 10
         self.jawA, self.wristA = 5.0, -90.0
         self.last_xyz = (self.x, self.y, self.z)
-        self.last_jawA = self.jawA
-        self.last_wristA = self.wristA
 
         if pygame.joystick.get_count() == 0:
             self.connected = False
@@ -286,44 +163,33 @@ class XboxController:
             self.joystick.init()
             print(f"✅ Controller: {self.joystick.get_name()}")
 
-    def scale_axis(self, val):
-        return int(val * 100)
+    def scale_axis(self, val): return int(val * 100)
 
     def poll(self):
         if self.connected:
-            left_speed = 0
-            right_speed = 0
-            buttons = []
+            left_speed, right_speed = 0, 0
+            buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
 
             if self.mode == 0 and self.state.mode == False:
                 left_speed = self.scale_axis(self.joystick.get_axis(1))
                 right_speed = self.scale_axis(self.joystick.get_axis(3))
                 if abs(left_speed) < self.deadzone * 100: left_speed = 0
                 if abs(right_speed) < self.deadzone * 100: right_speed = 0
-            
             elif self.mode == 1 and self.state.mode == False:
-                left_x = self.joystick.get_axis(0)
-                left_y = self.joystick.get_axis(1)
-                right_y = self.joystick.get_axis(3)
-                
+                left_x, left_y, right_y = self.joystick.get_axis(0), self.joystick.get_axis(1), self.joystick.get_axis(3)
                 if abs(left_x) > 0.2: self.x += left_x * 0.5
                 if abs(left_y) > 0.2: self.z -= left_y * 0.5
                 if abs(right_y) > 0.2: self.y -= right_y * 0.5
-
                 if (self.x, self.y, self.z) != self.last_xyz:
                     Arm.move_arm_to(self.x, self.y, self.z, speed=200, acc=100)
                     self.last_xyz = (self.x, self.y, self.z)
 
-            buttons = [self.joystick.get_button(i) for i in range(self.joystick.get_numbuttons())]
-            
             if buttons[0] == 1:
                 self.mode = 1 if self.mode == 0 else 0
-                time.sleep(0.5)
-
+                time.sleep(0.3)
             if buttons[1] == 1:
                 self.state.toggle()
-                time.sleep(0.5)
-
+                time.sleep(0.3)
             if buttons[4]: self.jawA += 2
             if buttons[3]: self.jawA -= 2
             if buttons[6]: self.wristA -= 5
@@ -331,26 +197,21 @@ class XboxController:
 
             self.data = {"L": left_speed, "R": right_speed, "buttons": buttons}
             return self.data
-        else:
-            return {"L": 0, "R": 0, "buttons": []}
+        return {"L": 0, "R": 0, "buttons": []}
 
-    def get_axes(self):
-        return [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())] if self.connected else [0]
-
+    def get_axes(self): return [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())] if self.connected else [0]
 
 class AI_Inputs:
     def __init__(self, motorSystem, state, frame_width=640, frame_height=480, sensorData=None, targets=["Empty","Empty","Empty","Empty"]):
-        
-        # --- DRIVE SPEEDS & BEHAVIORS ---
-        self.max_speed = 90          
+        self.lock = threading.Lock()
+        self.max_speed = 99          
         self.min_speed = 30          
-        self.reverse_speed = 60      
-        self.spin_speed = 29         
-        self.ramming_speed = -60     
+        self.reverse_speed = 70      
+        self.spin_speed = 28         
+        self.ramming_speed = -70     
         self.turn_scale = 0.5        
         self.center_threshold = 50   
         
-        # --- DISTANCE & SENSOR THRESHOLDS ---
         self.slow_start_dist = 800   
         self.stop_dist = 300         
         self.avoidance_zone = 800.0  
@@ -359,11 +220,9 @@ class AI_Inputs:
         self.cam_stop_ball = 300     
         self.cam_stop_bucket = 275   
         
-        # --- WANDER / EXPLORE SETTINGS ---
         self.search_timeout = 8.0    
         self.wander_duration = 3.0   
         
-        # --- ARM CONFIGURATION & LIMITS ---
         self.SAFE_HEIGHT = 7         
         self.GRAB_HEIGHT = -2.0      
         self.DROP_HEIGHT = 16        
@@ -376,7 +235,6 @@ class AI_Inputs:
         self.centering_rate = 0.1    
         self.command_delay = 0.1     
 
-        # --- INTERNAL STATE VARIABLES ---
         self.motorSystem = motorSystem
         self.state = state
         self.sensorData = sensorData
@@ -429,580 +287,401 @@ class AI_Inputs:
         self.ball_grabbed = False
         self.lost_target_timer = 0
 
-    def update_target(self, bottom_detections, top_detections, depth_frame=None):
-        if self.count >= len(self.targets):
-            self.driving = False
-            self.has_locked_target = False 
-            self.target_visible = False
-            return
-            
-        if self.ball_grabbed or self.mode in [2, 3] or self.verifying_grab:
-            top_detections = [] 
-            
-        if(self.ball_grabbed == False):
-            wanted_label = self.targets[self.count]
-        else:
-            wanted_label = (self.targets[self.count].split("_"))[0] + "_bucket"
-
-        if wanted_label.lower() == "empty":
-            self.driving = False
-            self.has_locked_target = False
-            self.target_visible = False
-            self.mode = 0
-            return
-
-        found = False
-        target_det = None
-        self.obstacles = [] 
-        self.active_camera = None
-
-        if bottom_detections:
-            for det in bottom_detections:
-                label_lower = det["label"].lower()
-                if label_lower == wanted_label.lower():
-                    target_det = det
-                    self.active_camera = "bottom"
-                elif ("ball" in label_lower or "bucket" in label_lower) and label_lower != wanted_label.lower():
-                    self.obstacles.append(det)
-
-        if target_det is None and top_detections:
-            for det in top_detections:
-                if det["label"].lower() == wanted_label.lower():
-                    target_det = det
-                    self.active_camera = "top"
-                    break 
-
-        if target_det:
-            cx = int((target_det["bbox"][0] + target_det["bbox"][2]) / 2)
-            cy = int((target_det["bbox"][1] + target_det["bbox"][3]) / 2)
-            
-            self.target_height = target_det["bbox"][3] - target_det["bbox"][1]
-            self.target_pos["x"] = cx
-            self.target_pos["y"] = cy
-            self.last_target_x = cx 
-                
-            self.driving = True
-            found = True
-            self.has_locked_target = True 
-            
-            if self.mode in [1, 4, 8]:
-                print(f"👀 Target spotted via {self.active_camera} camera! Tracking {wanted_label}...")
-                self.mode = 0
-                self.search_timer = 0 
-                
-        self.target_visible = found
+    def get_fast_median_depth(self, depth_frame, cx, cy, patch_w, patch_h):
+        y_min = max(0, int(cy - patch_h//2))
+        y_max = min(self.frame_height, int(cy + patch_h//2))
+        x_min = max(0, int(cx - patch_w//2))
+        x_max = min(self.frame_width, int(cx + patch_w//2))
         
-        if self.driving and depth_frame is not None:
-            if self.target_visible and self.active_camera == "bottom":
-                cx_safe = self.target_pos["x"]
-                cy_safe = self.target_pos["y"]
-                patch_size = 20
-                half_p = patch_size // 2
-                
-                y_min = max(0, cy_safe - half_p)
-                y_max = min(self.frame_height, cy_safe + half_p)
-                x_min = max(0, cx_safe - half_p)
-                x_max = min(self.frame_width, cx_safe + half_p)
-                
-                depth_patch = depth_frame[y_min:y_max, x_min:x_max]
-                valid_depths = depth_patch[depth_patch > 0]
-                
-                if valid_depths.size > 0:
-                    median_d_val = np.median(valid_depths) * 0.001
-                    if median_d_val > 0.1: 
-                        self.dist = median_d_val
-                        self.distance_mm = median_d_val * 1000
+        patch = depth_frame[y_min:y_max, x_min:x_max].astype(np.float32)
+        patch[patch == 0] = np.nan 
+        
+        with np.errstate(all='ignore'):
+            median = np.nanmedian(patch)
+        return median if not np.isnan(median) else 0.0
 
-            elif self.ball_grabbed and self.mode == 1:
-                last_cx = self.target_pos["x"]
-                last_cy = self.target_pos["y"]
+    def update_target(self, bottom_detections, top_detections, depth_frame=None):
+        with self.lock:
+            if self.count >= len(self.targets):
+                self.driving, self.has_locked_target, self.target_visible = False, False, False
+                return
                 
-                patch_w = 100  
-                patch_h = 60   
+            if self.ball_grabbed or self.mode in [2, 3] or self.verifying_grab:
+                top_detections = [] 
                 
-                y_min = max(0, int(last_cy - patch_h))
-                y_max = min(self.frame_height, int(last_cy + patch_h))
-                x_min = max(0, int(last_cx - patch_w))
-                x_max = min(self.frame_width, int(last_cx + patch_w))
-                
-                depth_patch = depth_frame[y_min:y_max, x_min:x_max]
-                valid_depths = depth_patch[(depth_patch > 0) & (depth_patch < 1500)]
-                
-                if valid_depths.size > 0:
-                    body_dist = np.median(valid_depths) * 0.001
-                    if body_dist > 0.05: 
-                        self.dist = body_dist
-                        self.distance_mm = body_dist * 1000
+            wanted_label = (self.targets[self.count].split("_"))[0] + "_bucket" if self.ball_grabbed else self.targets[self.count]
 
-            elif self.active_camera == "top":
-                self.dist = 1.5  
-                self.distance_mm = 1500
+            if wanted_label.lower() == "empty":
+                self.driving, self.has_locked_target, self.target_visible, self.mode = False, False, False, 0
+                return
 
-        if depth_frame is not None:
-            for obs in self.obstacles:
-                obs_cx = int((obs["bbox"][0] + obs["bbox"][2]) / 2)
-                obs_cy = int((obs["bbox"][1] + obs["bbox"][3]) / 2)
-                obs["center"] = (obs_cx, obs_cy)
-                
-                o_y_min = max(0, obs_cy - 5)
-                o_y_max = min(self.frame_height, obs_cy + 5)
-                o_x_min = max(0, obs_cx - 5)
-                o_x_max = min(self.frame_width, obs_cx + 5)
-                
-                obs_patch = depth_frame[o_y_min:o_y_max, o_x_min:o_x_max]
-                valid_obs = obs_patch[obs_patch > 0]
-                if valid_obs.size > 0:
-                    obs["distance_mm"] = (np.median(valid_obs) * 0.001) * 1000
-                else:
-                    obs["distance_mm"] = 9999
-        else:
-            for obs in self.obstacles:
-                obs["distance_mm"] = 9999
+            found = False
+            target_det = None
+            self.obstacles = [] 
+            self.active_camera = None
 
-        if self.mode == 0 and self.distance_mm < 2500 and self.distance_mm > 0:
-            closest_obstacle_dist = 9999
-            closest_obstacle_x = 0
-            current_target_x = self.target_pos["x"]
-            
-            for obs in self.obstacles:
-                obs_x = obs["center"][0]
-                obs_dist = obs["distance_mm"]
-                if abs(obs_x - current_target_x) < 200: 
-                    if obs_dist < closest_obstacle_dist:
-                        closest_obstacle_dist = obs_dist
-                        closest_obstacle_x = obs_x
-            
-            if (closest_obstacle_dist < (self.distance_mm - 200) and closest_obstacle_dist <= 2500):
-                print(f"🛑 Corridor Blocked! Target: {self.distance_mm}mm, Obstacle: {closest_obstacle_dist}mm")
-                pixels_from_center = closest_obstacle_x - (self.frame_width / 2)
-                degrees_per_pixel = self.camera_fov_deg / self.frame_width
-                angle_to_obs = pixels_from_center * degrees_per_pixel
-                
-                angle_rad = math.radians(angle_to_obs)
-                obs_cartesian_x = closest_obstacle_dist * math.cos(angle_rad)
-                obs_cartesian_y = closest_obstacle_dist * math.sin(angle_rad)
-                
-                flank_offset_mm = 450.0 
-                
-                if closest_obstacle_x < current_target_x or abs(closest_obstacle_x - current_target_x) < 30:
-                    waypoint_y = obs_cartesian_y + flank_offset_mm
-                    self.waypoint_turn_dir = 1
-                else:
-                    waypoint_y = obs_cartesian_y - flank_offset_mm
-                    self.waypoint_turn_dir = -1
+            if bottom_detections:
+                for det in bottom_detections:
+                    label_lower = det["label"].lower()
+                    if label_lower == wanted_label.lower():
+                        target_det = det
+                        self.active_camera = "bottom"
+                    elif ("ball" in label_lower or "bucket" in label_lower) and label_lower != wanted_label.lower():
+                        self.obstacles.append(det)
+
+            if target_det is None and top_detections:
+                for det in top_detections:
+                    if det["label"].lower() == wanted_label.lower():
+                        target_det = det
+                        self.active_camera = "top"
+                        break 
+
+            if target_det:
+                cx, cy = target_det["center"]
+                self.target_height = target_det["bbox"][3] - target_det["bbox"][1]
+                self.target_pos["x"], self.target_pos["y"] = cx, cy
+                self.last_target_x = cx 
                     
-                waypoint_x = obs_cartesian_x 
-                dist_to_waypoint = math.hypot(waypoint_x, waypoint_y)
-                heading_to_waypoint = math.degrees(math.atan2(waypoint_y, waypoint_x))
+                self.driving, found, self.has_locked_target = True, True, True
                 
-                max_speed_mm_s = 914.4 / 1.6 
-                bypass_drive_speed_mm_s = max_speed_mm_s * 0.65 
-                turn_speed_deg_s = 60.0 
-                
-                self.waypoint_turn_duration = abs(heading_to_waypoint) / turn_speed_deg_s
-                self.waypoint_drive_duration = dist_to_waypoint / bypass_drive_speed_mm_s
-                
-                self.waypoint_turn_duration = max(0.3, self.waypoint_turn_duration)
-                self.waypoint_drive_duration = max(0.8, self.waypoint_drive_duration)
-                
-                print(f"📍 Waypoint: Turn {self.waypoint_turn_duration:.2f}s, Drive {self.waypoint_drive_duration:.2f}s")
-                
-                self.mode = 6 
-                self.bypass_state = 0 
-                self.bypass_timer = time.time()
+                if self.mode in [1, 4, 8]:
+                    print(f"👀 Target spotted via {self.active_camera} camera! Tracking {wanted_label}...")
+                    self.mode = 0
+                    self.search_timer = 0 
+                    
+            self.target_visible = found
+            
+            if self.driving and depth_frame is not None:
+                if self.target_visible and self.active_camera == "bottom":
+                    median_val = self.get_fast_median_depth(depth_frame, self.target_pos["x"], self.target_pos["y"], 20, 20)
+                    if median_val > 100.0: 
+                        self.distance_mm = median_val
+                        self.dist = self.distance_mm * 0.001
 
-        if not found:
-            if self.mode in [1, 2, 3, 6, 7, 8]: 
-                pass 
-            elif self.driving and self.distance_mm < 1200 and self.has_locked_target and self.mode == 0:
-                self.mode = 1
-                self.driving = True
+                elif self.ball_grabbed and self.mode == 1:
+                    median_val = self.get_fast_median_depth(depth_frame, self.target_pos["x"], self.target_pos["y"], 100, 60)
+                    if 50.0 < median_val < 1500.0: 
+                        self.distance_mm = median_val
+                        self.dist = self.distance_mm * 0.001
+
+                elif self.active_camera == "top":
+                    self.dist, self.distance_mm = 1.5, 1500
+
+            if depth_frame is not None:
+                for obs in self.obstacles:
+                    cx, cy = obs["center"]
+                    median_val = self.get_fast_median_depth(depth_frame, cx, cy, 10, 10)
+                    obs["distance_mm"] = median_val if median_val > 0 else 9999
             else:
-                self.mode = 4
-                self.driving = True
-                self.has_locked_target = False
+                for obs in self.obstacles: obs["distance_mm"] = 9999
+
+            if self.mode == 0 and self.distance_mm < 2500 and self.distance_mm > 0:
+                closest_obstacle_dist = 9999
+                closest_obstacle_x = 0
+                
+                for obs in self.obstacles:
+                    if abs(obs["center"][0] - self.target_pos["x"]) < 200: 
+                        if obs["distance_mm"] < closest_obstacle_dist:
+                            closest_obstacle_dist = obs["distance_mm"]
+                            closest_obstacle_x = obs["center"][0]
+                
+                if (closest_obstacle_dist < (self.distance_mm - 200) and closest_obstacle_dist <= 2500):
+                    print(f"🛑 Corridor Blocked! Target: {self.distance_mm}mm, Obstacle: {closest_obstacle_dist}mm")
+                    pixels_from_center = closest_obstacle_x - (self.frame_width / 2)
+                    degrees_per_pixel = self.camera_fov_deg / self.frame_width
+                    angle_to_obs = pixels_from_center * degrees_per_pixel
+                    
+                    angle_rad = math.radians(angle_to_obs)
+                    obs_cartesian_x = closest_obstacle_dist * math.cos(angle_rad)
+                    obs_cartesian_y = closest_obstacle_dist * math.sin(angle_rad)
+                    
+                    flank_offset_mm = 450.0 
+                    
+                    if closest_obstacle_x < self.target_pos["x"] or abs(closest_obstacle_x - self.target_pos["x"]) < 30:
+                        waypoint_y = obs_cartesian_y + flank_offset_mm
+                        self.waypoint_turn_dir = 1
+                    else:
+                        waypoint_y = obs_cartesian_y - flank_offset_mm
+                        self.waypoint_turn_dir = -1
+                        
+                    waypoint_x = obs_cartesian_x 
+                    dist_to_waypoint = math.hypot(waypoint_x, waypoint_y)
+                    heading_to_waypoint = math.degrees(math.atan2(waypoint_y, waypoint_x))
+                    
+                    max_speed_mm_s = 914.4 / 1.6 
+                    bypass_drive_speed_mm_s = max_speed_mm_s * 0.65 
+                    turn_speed_deg_s = 60.0 
+                    
+                    self.waypoint_turn_duration = max(0.3, abs(heading_to_waypoint) / turn_speed_deg_s)
+                    self.waypoint_drive_duration = max(0.8, dist_to_waypoint / bypass_drive_speed_mm_s)
+                    
+                    self.mode = 6 
+                    self.bypass_state = 0 
+                    self.bypass_timer = time.time()
+
+            if not found:
+                if self.mode in [1, 2, 3, 6, 7, 8]: pass 
+                elif self.driving and self.distance_mm < 1200 and self.has_locked_target and self.mode == 0:
+                    self.mode, self.driving = 1, True
+                else:
+                    self.mode, self.driving, self.has_locked_target = 4, True, False
 
     def update_arm_logic(self, webcam_detections):
-        if self.count >= len(self.targets):
-            return 
-            
-        current_time = time.time()
-        wanted_label = self.targets[self.count]
-
-        if self.mode == 4:
-            # FIXED: Only sweep the arm if we are searching for a ball!
-            if not self.ball_grabbed:
-                self.targetY += self.sweep_rate * self.sweep_dir
-                if self.targetY > 12.0: self.sweep_dir = -1
-                elif self.targetY < -12.0: self.sweep_dir = 1
-            else:
-                self.targetY = 0.0 # Stay locked in the center
+        with self.lock:
+            if self.count >= len(self.targets): return 
                 
-            self.targetX = 8.0
-            self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
-            
-        elif self.mode in [0, 1]:
-            self.targetY = 0.0
-            self.targetX = 9.0
-            self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
+            current_time = time.time()
+            wanted_label = self.targets[self.count]
 
-        if self.mode == 2 and self.grab_state == 0:
-            webcam_sees_target = False
-            centered_this_frame = False
-            
-            for det in webcam_detections:
-                if det["label"].lower() == wanted_label.lower():
-                    webcam_sees_target = True
-                    x_c = int((det["bbox"][0] + det["bbox"][2]) / 2)
-                    
-                    if x_c <= 280:
-                        self.targetY += self.centering_rate
-                        self.center_counter = 0
-                        self.y_aligned = False 
-                    elif x_c >= 360:
-                        self.targetY -= self.centering_rate
-                        self.center_counter = 0
-                        self.y_aligned = False
-                    else:
-                        centered_this_frame = True
-
-            if not webcam_sees_target and not self.ball_grabbed:
-                if self.lost_target_timer == 0:
-                    self.lost_target_timer = current_time 
-                elif current_time - self.lost_target_timer > 3.0: 
-                    print("⚠️ Ball lost during pickup! Ramming to reset...")
-                    self.mode = 7
-                    self.ramming_timer = current_time
-                    self.targetX = 9.0
-                    self.targetY = 0.0
-                    self.targetZ = self.SAFE_HEIGHT
-                    self.grab_state = 0
-                    self.lost_target_timer = 0
-                    self.driving = True
-                    self.leftActive = True
-                    self.rightActive = True
-                    return 
-            else:
-                self.lost_target_timer = 0 
-            
-            if webcam_sees_target:
-                if centered_this_frame:
-                    self.center_counter += 1
+            if self.mode == 4:
+                if not self.ball_grabbed:
+                    self.targetY += self.sweep_rate * self.sweep_dir
+                    if self.targetY > 12.0: self.sweep_dir = -1
+                    elif self.targetY < -12.0: self.sweep_dir = 1
                 else:
-                    self.center_counter = 0
-
-            if self.center_counter >= 20:
-                self.y_aligned = True
-
-        if self.mode == 2:
-            if self.grab_state == 0:
-                if self.ball_grabbed:
-                    self.targetZ = self.DROP_HEIGHT 
-                    self.targetJawAngle = self.JAW_CLOSED
-                    self.y_aligned = True 
-                    print(f"LOCKED ON BUCKET -> PUNCHING FORWARD")
+                    self.targetY = 0.0 
                     
-                    old_x = self.targetX 
-                    self.targetX = self.DROP_REACH_X 
-                    reach_ratio = self.targetX / old_x
-                    self.targetY = self.targetY * reach_ratio
-                    
-                    self.grab_state = 1
-                    self.state_timer = current_time
-                else:
-                    self.targetZ = self.SAFE_HEIGHT 
-                    self.targetJawAngle = self.JAW_OPEN
-                    if self.y_aligned and self.dist > 0:
-                        print(f"LOCKED ON BALL -> REACHING (Dist: {self.dist:.3f}m)")
-                        old_x = self.targetX 
-                        self.targetX = ((self.dist * 3.3) * 12) + 9 
-                        reach_ratio = self.targetX / old_x
-                        self.targetY = self.targetY * reach_ratio
-                        
-                        arm1 = 10
-                        arm2 = 14
-                        max_reach = arm1 + arm2
-                        target_dist = math.sqrt(self.targetX**2 + self.targetY**2)
-                        
-                        if abs(self.targetZ) > max_reach or target_dist > math.sqrt(max_reach**2 - self.targetZ**2):
-                            print("⚠️ Target is OUT OF REACH! Initiating Ramming Speed...")
-                            self.mode = 7
-                            self.ramming_timer = time.time()
-                            self.targetX = 9.0
-                            self.targetY = 0.0
-                            self.targetZ = self.SAFE_HEIGHT
-                            self.grab_state = 0
-                            return 
-                        
-                        self.grab_state = 1
-                        self.state_timer = current_time
-
-            elif self.grab_state == 1:
-                if current_time - self.state_timer > 2.0:
-                    self.grab_state = 2
-                    self.state_timer = current_time
-            
-            elif self.grab_state == 2:
-                if self.ball_grabbed:
-                    self.targetZ = self.DROP_HEIGHT
-                else:
-                    self.targetZ = self.GRAB_HEIGHT
-                    
-                if current_time - self.state_timer > 2.0:
-                    self.grab_state = 3
-                    self.state_timer = current_time
-
-            elif self.grab_state == 3:
-                if self.ball_grabbed:
-                    self.targetJawAngle = self.JAW_OPEN 
-                else:
-                    self.targetJawAngle = self.JAW_CLOSED 
-                    
-                if current_time - self.state_timer > 3.0:
-                    self.grab_state = 4
-                    self.state_timer = current_time
-
-            elif self.grab_state == 4:
-                if self.ball_grabbed:
-                    self.targetZ = self.SAFE_HEIGHT + 1.5
-                    self.targetY = 0
-                else:
-                    self.targetZ = self.DROP_HEIGHT 
-                self.targetX = 8
-                self.targetY  = 0
+                self.targetX = 8.0
+                self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
                 
-                if current_time - self.state_timer > 2.0:
-                    self.grab_state = 0
-                    self.center_counter = 0
-                    self.y_aligned = False 
-                    self.dist = 0
-                    self.distance_mm = 5000
-                    self.mode = 3  
-                    self.reverse_timer = current_time
-                    
+            elif self.mode in [0, 1]:
+                self.targetY = 0.0
+                self.targetX = 9.0
+                self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.SAFE_HEIGHT
+
+            if self.mode == 2 and self.grab_state == 0:
+                webcam_sees_target = False
+                centered_this_frame = False
+                
+                for det in webcam_detections:
+                    if det["label"].lower() == wanted_label.lower():
+                        webcam_sees_target = True
+                        x_c = det["center"][0]
+                        
+                        # THE FIX: Clamped Proportional Step
+                        error_x = 320 - x_c 
+                        if abs(error_x) > 40:
+                            # Dynamically scale step based on distance from center
+                            dynamic_step = (error_x / 320.0) * 0.15 
+                            
+                            # Hard limit the max jump per frame so it doesn't violently overshoot
+                            clamped_step = max(-0.2, min(0.2, dynamic_step))
+                            
+                            self.targetY += clamped_step
+                            self.center_counter, self.y_aligned = 0, False 
+                        else:
+                            centered_this_frame = True
+
+                if not webcam_sees_target and not self.ball_grabbed:
+                    if self.lost_target_timer == 0:
+                        self.lost_target_timer = current_time 
+                    elif current_time - self.lost_target_timer > 3.0: 
+                        print("⚠️ Ball lost! Ramming to reset...")
+                        self.mode, self.ramming_timer = 7, current_time
+                        self.targetX, self.targetY, self.targetZ = 9.0, 0.0, self.SAFE_HEIGHT
+                        self.grab_state, self.lost_target_timer = 0, 0
+                        self.driving, self.leftActive, self.rightActive = True, True, True
+                        return 
+                else:
+                    self.lost_target_timer = 0 
+                
+                if webcam_sees_target:
+                    self.center_counter = self.center_counter + 1 if centered_this_frame else 0
+
+                if self.center_counter >= 20: self.y_aligned = True
+
+            if self.mode == 2:
+                if self.grab_state == 0:
                     if self.ball_grabbed:
-                        print("BALL DROPPED -> BACKING UP & SEEKING NEXT TARGET")
-                        self.ball_grabbed = False
-                        self.count += 1  
+                        self.targetZ, self.targetJawAngle, self.y_aligned = self.DROP_HEIGHT, self.JAW_CLOSED, True 
+                        old_x = self.targetX 
+                        self.targetX = self.DROP_REACH_X 
+                        self.targetY = self.targetY * (self.targetX / old_x)
+                        self.grab_state, self.state_timer = 1, current_time
                     else:
-                        print("GRAB COMPLETE -> BACKING UP FOR VERIFICATION")
-                        self.verifying_grab = True 
+                        self.targetZ, self.targetJawAngle = self.SAFE_HEIGHT, self.JAW_OPEN
+                        if self.y_aligned and self.dist > 0:
+                            old_x = self.targetX 
+                            self.targetX = ((self.dist * 3.3) * 12) + 9 
+                            self.targetY = self.targetY * (self.targetX / old_x)
+                            
+                            max_reach = 10 + 14
+                            target_dist = math.sqrt(self.targetX**2 + self.targetY**2)
+                            
+                            if abs(self.targetZ) > max_reach or target_dist > math.sqrt(max_reach**2 - self.targetZ**2):
+                                print("⚠️ Target is OUT OF REACH! Initiating Ramming Speed...")
+                                self.mode, self.ramming_timer = 7, time.time()
+                                self.targetX, self.targetY, self.targetZ, self.grab_state = 9.0, 0.0, self.SAFE_HEIGHT, 0
+                                return 
+                            
+                            self.grab_state, self.state_timer = 1, current_time
 
-        if current_time - self.last_command_time > self.command_delay:
-            Arm.move_joint(5, self.targetJawAngle)
-            
-            if self.grab_state > 0 and not self.ball_grabbed:
-                final_x = self.targetX + self.GRAB_OFFSET_X
-                final_y = self.targetY + self.GRAB_OFFSET_Y
-            else:
-                final_x = self.targetX
-                final_y = self.targetY
-            
-            Arm.move_arm_to(final_x, final_y, self.targetZ)
-            self.last_command_time = current_time
+                elif self.grab_state == 1:
+                    if current_time - self.state_timer > 2.0:
+                        self.grab_state, self.state_timer = 2, current_time
+                
+                elif self.grab_state == 2:
+                    self.targetZ = self.DROP_HEIGHT if self.ball_grabbed else self.GRAB_HEIGHT
+                    if current_time - self.state_timer > 2.0:
+                        self.grab_state, self.state_timer = 3, current_time
+
+                elif self.grab_state == 3:
+                    self.targetJawAngle = self.JAW_OPEN if self.ball_grabbed else self.JAW_CLOSED 
+                    if current_time - self.state_timer > 1.0:
+                        self.grab_state, self.state_timer = 4, current_time
+
+                elif self.grab_state == 4:
+                    if self.ball_grabbed:
+                        self.targetZ, self.targetY = self.SAFE_HEIGHT + 1.5, 0
+                    else:
+                        self.targetZ = self.DROP_HEIGHT 
+                    self.targetX, self.targetY  = 8, 0
+                    
+                    if current_time - self.state_timer > 2.0:
+                        self.grab_state, self.center_counter, self.y_aligned, self.dist, self.distance_mm = 0, 0, False, 0, 5000
+                        self.mode, self.reverse_timer = 3, current_time
+                        
+                        if self.ball_grabbed:
+                            print("BALL DROPPED -> BACKING UP & SEEKING NEXT TARGET")
+                            self.ball_grabbed = False
+                            self.count += 1  
+                        else:
+                            print("GRAB COMPLETE -> BACKING UP FOR VERIFICATION")
+                            self.verifying_grab = True 
+
+            if current_time - self.last_command_time > self.command_delay:
+                Arm.move_joint(5, self.targetJawAngle)
+                final_x = self.targetX + self.GRAB_OFFSET_X if (self.grab_state > 0 and not self.ball_grabbed) else self.targetX
+                final_y = self.targetY + self.GRAB_OFFSET_Y if (self.grab_state > 0 and not self.ball_grabbed) else self.targetY
+                Arm.move_arm_to(final_x, final_y, self.targetZ)
+                self.last_command_time = current_time
 
     def move_command(self):
-        left_speed = 0
-        right_speed = 0
-        
-        if self.mode == 7:
-            if time.time() - self.ramming_timer < 1.0:
-                return {"L": self.ramming_speed, "R": self.ramming_speed} 
-            else:
-                print("Ramming complete. Attempting to re-acquire target...")
-                self.mode = 3
-                self.reverse_timer = time.time()
-                return {"L": 0, "R": 0}
-
-        if self.mode == 6:
-            elapsed = time.time() - self.bypass_timer
-            if self.bypass_state == 0:
-                if elapsed < self.waypoint_turn_duration:
-                    if self.waypoint_turn_dir == 1:
-                        return {"L": -50, "R": 50} 
-                    else:
-                        return {"L": 50, "R": -50} 
-                else:
-                    self.bypass_state = 1
-                    self.bypass_timer = time.time()
-                    elapsed = 0
+        with self.lock:
+            left_speed, right_speed = 0, 0
             
-            if self.bypass_state == 1:
-                if elapsed < self.waypoint_drive_duration:
-                    return {"L": -50, "R": -50} 
+            if self.mode == 7:
+                if time.time() - self.ramming_timer < 1.0:
+                    return {"L": self.ramming_speed, "R": self.ramming_speed} 
                 else:
-                    self.mode = 4 
-                    self.driving = True
-                    self.leftActive = True 
-                    self.rightActive = True
+                    self.mode, self.reverse_timer = 3, time.time()
                     return {"L": 0, "R": 0}
 
-        if self.mode == 3:
-            if time.time() - self.reverse_timer < 2.0:
-                self.data = {"L": self.reverse_speed, "R": self.reverse_speed}
-                return self.data
-            else:
-                if self.verifying_grab:
-                    if self.verification_timer == 0:
-                        self.verification_timer = time.time()
-                        return {"L": 0, "R": 0} 
-                    
-                    if time.time() - self.verification_timer < 0.5:
+            if self.mode == 6:
+                elapsed = time.time() - self.bypass_timer
+                if self.bypass_state == 0:
+                    if elapsed < self.waypoint_turn_duration:
+                        return {"L": -50, "R": 50} if self.waypoint_turn_dir == 1 else {"L": 50, "R": -50} 
+                    else:
+                        self.bypass_state, self.bypass_timer, elapsed = 1, time.time(), 0
+                
+                if self.bypass_state == 1:
+                    if elapsed < self.waypoint_drive_duration:
+                        return {"L": -50, "R": -50} 
+                    else:
+                        self.mode, self.driving, self.leftActive, self.rightActive = 4, True, True, True
                         return {"L": 0, "R": 0}
-                    
-                    if self.target_visible:
-                        print("❌ VERIFICATION FAILED: Ball still detected. Retrying grab...")
-                        self.ball_grabbed = False
-                    else:
-                        print("✅ VERIFICATION SUCCESS: Ball secured. Switching to bucket.")
-                        self.ball_grabbed = True
+
+            if self.mode == 3:
+                if time.time() - self.reverse_timer < 2.0:
+                    self.data = {"L": self.reverse_speed, "R": self.reverse_speed}
+                    return self.data
+                else:
+                    if self.verifying_grab:
+                        if self.verification_timer == 0:
+                            self.verification_timer = time.time()
+                            return {"L": 0, "R": 0} 
+                        if time.time() - self.verification_timer < 0.5:
+                            return {"L": 0, "R": 0}
                         
-                    self.verifying_grab = False
-                    self.verification_timer = 0
-                
-                print("Spinning to search...")
-                self.mode = 4 
-                self.driving = True
-                self.leftActive = True 
-                self.rightActive = True
-        
-        if self.mode == 4:
-            if self.search_timer == 0:
-                self.search_timer = time.time()
-            elif time.time() - self.search_timer > self.search_timeout:
-                print("🔄 Search timeout! Initiating wander protocol...")
-                self.mode = 8
-                self.search_timer = 0
-                self.wander_timer = time.time()
-                self.wander_target_x = self.frame_width / 2 
-                
-                for obs in self.obstacles:
-                    obs_label = obs["label"].lower()
-                    if self.ball_grabbed and "bucket" in obs_label:
-                        self.wander_target_x = obs["center"][0]
-                        break
-                    elif not self.ball_grabbed and "ball" in obs_label:
-                        self.wander_target_x = obs["center"][0]
-                        break
-
-            if self.last_target_x > (self.frame_width / 2):
-                self.data = {"L": -self.spin_speed, "R": self.spin_speed} 
-            else:
-                self.data = {"L": self.spin_speed, "R": -self.spin_speed} 
-            return self.data
-            
-        if self.mode == 8:
-            if time.time() - self.wander_timer < self.wander_duration:
-                error = self.wander_target_x - (self.frame_width / 2)
-                turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
-                base_spd = self.max_speed * 0.75 
-                
-                if error > 0:
-                    left_s = base_spd
-                    right_s = base_spd * (1 - turn_amount)
-                else:
-                    left_s = base_spd * (1 + turn_amount)
-                    right_s = base_spd
-                    
-                return {"L": int(-max(0, left_s)), "R": int(-max(0, right_s))}
-            else:
-                print("🛑 Wander complete. Spinning to search again...")
-                self.mode = 4
-                self.search_timer = time.time()
-                return {"L": 0, "R": 0}
-
-        if self.driving and self.mode in [0, 1]:
-            if self.distance_mm >= self.slow_start_dist:
-                forward_speed = self.max_speed
-            elif self.distance_mm <= self.stop_dist:
-                forward_speed = self.min_speed
-                if self.mode == 0:
-                    self.mode = 1 
-            else:
-                ratio = (self.distance_mm - self.stop_dist) / (self.slow_start_dist - self.stop_dist)
-                forward_speed = self.min_speed + (ratio * (self.max_speed - self.min_speed))
-
-            if self.target_visible:
-                target_x = self.target_pos["x"]
-                shift_amount = 0
-                
-                for obs in self.obstacles:
-                    obs_x = obs.get("center", [0, 0])[0]
-                    obs_dist = obs.get("distance_mm", 9999)
-                    
-                    if obs_dist < self.avoidance_zone and abs(obs_x - target_x) < 150:
-                        urgency = 1.0 - (obs_dist / self.avoidance_zone)
-                        if obs_x < target_x:
-                            shift_amount += 250 * urgency 
+                        if self.target_visible:
+                            print("❌ VERIFICATION FAILED: Retrying grab...")
+                            self.ball_grabbed = False
                         else:
-                            shift_amount -= 250 * urgency 
-                
-                virtual_target_x = target_x + shift_amount
-                virtual_target_x = max(50, min(self.frame_width - 50, virtual_target_x))
-                
-                error = virtual_target_x - (self.frame_width / 2)
+                            print("✅ VERIFICATION SUCCESS: Switching to bucket.")
+                            self.ball_grabbed = True
+                            
+                        self.verifying_grab, self.verification_timer = False, 0
+                    
+                    self.mode, self.driving, self.leftActive, self.rightActive = 4, True, True, True
+            
+            if self.mode == 4:
+                if self.search_timer == 0:
+                    self.search_timer = time.time()
+                elif time.time() - self.search_timer > self.search_timeout:
+                    print("🔄 Search timeout! Initiating wander protocol...")
+                    self.mode, self.search_timer, self.wander_timer = 8, 0, time.time()
 
-                if abs(error) < self.center_threshold:
-                    left_speed = forward_speed
-                    right_speed = forward_speed
-                else:
+                self.data = {"L": -self.spin_speed, "R": self.spin_speed} if self.last_target_x > (self.frame_width / 2) else {"L": self.spin_speed, "R": -self.spin_speed} 
+                return self.data
+                
+            if self.mode == 8:
+                if time.time() - self.wander_timer < self.wander_duration:
+                    
+                    self.wander_target_x = self.frame_width / 2 
+                    for obs in self.obstacles:
+                        obs_label = obs["label"].lower()
+                        if("bucket" in obs_label or "ball" in obs_label):
+                            self.wander_target_x = obs["center"][0]
+                            break
+
+                    error = self.wander_target_x - (self.frame_width / 2)
                     turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
-                    if error > 0: 
-                        left_speed = forward_speed
-                        right_speed = forward_speed * (1 - turn_amount)
+                    base_spd = self.max_speed * 0.75 
+                    left_s = base_spd if error > 0 else base_spd * (1 + turn_amount)
+                    right_s = base_spd * (1 - turn_amount) if error > 0 else base_spd
+                    return {"L": int(-max(0, left_s)), "R": int(-max(0, right_s))}
+                else:
+                    self.mode, self.search_timer = 4, time.time()
+                    return {"L": 0, "R": 0}
+
+            if self.driving and self.mode in [0, 1]:
+                if self.distance_mm >= self.slow_start_dist:
+                    forward_speed = self.max_speed
+                elif self.distance_mm <= self.stop_dist:
+                    forward_speed = self.min_speed
+                    if self.mode == 0: self.mode = 1 
+                else:
+                    ratio = (self.distance_mm - self.stop_dist) / (self.slow_start_dist - self.stop_dist)
+                    forward_speed = self.min_speed + (ratio * (self.max_speed - self.min_speed))
+
+                if self.target_visible:
+                    shift_amount = sum([250 * (1.0 - (obs.get("distance_mm", 9999) / self.avoidance_zone)) 
+                                        for obs in self.obstacles 
+                                        if obs.get("distance_mm", 9999) < self.avoidance_zone and abs(obs.get("center", [0,0])[0] - self.target_pos["x"]) < 150])
+
+                    virtual_target_x = max(50, min(self.frame_width - 50, self.target_pos["x"] + shift_amount))
+                    error = virtual_target_x - (self.frame_width / 2)
+
+                    if abs(error) < self.center_threshold:
+                        left_speed, right_speed = forward_speed, forward_speed
                     else:
-                        left_speed = forward_speed * (1 + turn_amount)
-                        right_speed = forward_speed
-            else:
-                left_speed = forward_speed+5
-                right_speed = forward_speed
+                        turn_amount = (error / (self.frame_width / 2)) * self.turn_scale
+                        left_speed = forward_speed if error > 0 else forward_speed * (1 + turn_amount)
+                        right_speed = forward_speed * (1 - turn_amount) if error > 0 else forward_speed
+                else:
+                    left_speed, right_speed = forward_speed+5, forward_speed
 
-        if self.mode == 1:
-            r_raw = self.sensorData.get("RightUNO", 999) if self.sensorData else 999
-            l_raw = self.sensorData.get("LeftUNO", 999) if self.sensorData else 999
-            try:
-                r_dist = float(r_raw)
-                l_dist = float(l_raw)
-            except:
-                r_dist, l_dist = 999.0, 999.0
+            if self.mode == 1:
+                r_dist = float(self.sensorData.get("RightUNO", 999)) if self.sensorData else 999.0
+                l_dist = float(self.sensorData.get("LeftUNO", 999)) if self.sensorData else 999.0
 
-            if not self.ball_grabbed:
-                if (r_dist <= self.sensor_stop_max and r_dist >= self.sensor_stop_min) : self.rightActive = False  
-                if (l_dist <= self.sensor_stop_max and l_dist >= self.sensor_stop_min) : self.leftActive = False   
-                if((self.distance_mm <= self.cam_stop_ball and self.distance_mm != 0)):
-                     self.leftActive = False 
-                     self.rightActive = False
-            
-            else:
-                if (r_dist <= self.sensor_stop_max and r_dist >= self.sensor_stop_min) : self.rightActive = False  
-                if (l_dist <= self.sensor_stop_max and l_dist >= self.sensor_stop_min) : self.leftActive = False 
+                if self.sensor_stop_min <= r_dist <= self.sensor_stop_max: self.rightActive = False  
+                if self.sensor_stop_min <= l_dist <= self.sensor_stop_max: self.leftActive = False   
                 
-                if self.distance_mm <= self.cam_stop_bucket and self.distance_mm != 0:
-                     print(f"Lidar Stop Triggered at {self.distance_mm}mm")
-                     self.leftActive = False 
-                     self.rightActive = False
+                stop_thresh = self.cam_stop_bucket if self.ball_grabbed else self.cam_stop_ball
                 
-                elif getattr(self, "target_height", 0) > (self.frame_height * 0.99):
-                     print("Bucket filling camera frame! Visual Killswitch Activated.")
-                     self.leftActive = False
-                     self.rightActive = False
-            
-            if not self.rightActive and not self.leftActive:
-                self.mode = 2
-                self.driving = False
+                if (self.distance_mm <= stop_thresh and self.distance_mm != 0) or (self.ball_grabbed and getattr(self, "target_height", 0) > (self.frame_height * 0.99)):
+                    self.leftActive, self.rightActive = False, False
                 
-        if self.mode == 2:
-           self.driving = False
+                if not self.rightActive and not self.leftActive:
+                    self.mode, self.driving = 2, False
+                    
+            if self.mode == 2:
+               self.driving = False
 
-        if not self.leftActive or not self.driving or self.mode == 2: 
-            left_speed = 0
-        else: 
-            left_speed = max(0, min(left_speed, self.max_speed)) * -1
+            left_speed = 0 if (not self.leftActive or not self.driving or self.mode == 2) else max(0, min(left_speed, self.max_speed)) * -1
+            right_speed = 0 if (not self.rightActive or not self.driving or self.mode == 2) else max(0, min(right_speed, self.max_speed)) * -1
 
-        if not self.rightActive or not self.driving or self.mode == 2: 
-            right_speed = 0
-        else: 
-            right_speed = max(0, min(right_speed, self.max_speed)) * -1
-
-        self.data = {"L": int(left_speed), "R": int(right_speed)}
-        return self.data
+            self.data = {"L": int(left_speed), "R": int(right_speed)}
+            return self.data
