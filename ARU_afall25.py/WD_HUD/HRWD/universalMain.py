@@ -1,5 +1,6 @@
 # --- HIGH-PERFORMANCE ASYNC ARCHITECTURE ---
 
+import os
 from Systems.InputSystem import XboxController, cvWebcam, AI_YOLO, AI_Inputs, intelCamera
 from Systems.motorSystem import CytronMotor
 from Systems.sensorSystem import sensorSystem
@@ -16,6 +17,17 @@ import cv2
 
 # --- GLOBAL Variables ---
 inputState = modeState()
+
+# --- IMAGE SAVING SETUP ---
+# This forces the folder to be created exactly where this Python script lives
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SAVE_DIR = os.path.join(SCRIPT_DIR, "captured_images")
+os.makedirs(SAVE_DIR, exist_ok=True)
+
+print(f"\n📁 WARNING: Images will be saved exactly to: {SAVE_DIR}\n")
+
+last_save_time = time.time()
+image_counter = 0
 
 class MockSerial:
     def __init__(self):
@@ -183,6 +195,7 @@ def main():
         sensors.stop()
 
 def control_loop():
+    global last_save_time, image_counter
     active_Cmd = {"L": 0, "R": 0}
     
     # 1. Grab Sensors
@@ -221,6 +234,22 @@ def control_loop():
 
     # 4. Fire Motors immediately
     motors.set_power(active_Cmd["L"], active_Cmd["R"])
+
+    # --- 4.5 NEW: SAVE IMAGE ONLY FROM INTEL CAMERA (img2) ---
+    is_moving = abs(active_Cmd["L"]) > 0 or abs(active_Cmd["R"]) > 0
+    current_time = time.time()
+    
+    if is_moving and (current_time - last_save_time >= 2.0):
+        if img2 is not None:
+            save_path = os.path.join(SAVE_DIR, f"intel_cam_{image_counter:04d}.jpg")
+            cv2.imwrite(save_path, img2)
+            print(f"📸 Saved image: {save_path}")
+            image_counter += 1
+        else:
+            print("⚠️ Robot is moving, but Intel camera (img2) is None. Can't save!")
+            
+        last_save_time = current_time
+    # -------------------------------------------------------
 
     # 5. Queue UI Updates
     if img2 is not None:
