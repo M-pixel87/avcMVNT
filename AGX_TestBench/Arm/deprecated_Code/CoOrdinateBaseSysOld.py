@@ -12,18 +12,20 @@ except Exception as e:
     print(f"⚠️ RoArm Connection Failed: {e}")
     roarm_dev = None
 
-angles = [0,0,90,0,0,0]
+#joint 5 is the jaw, keep open to 10 degrees
+angles = [0, 0, 90, 0, 0, 10]
 
 def clamp(value, min_val, max_val):
     return max(min_val, min(value, max_val))
 
+#random coordinate for tests
 def generate_random_xyz(x_range, y_range, z_range):
     x = random.uniform(*x_range)
     y = random.uniform(*y_range)
     z = random.uniform(*z_range)
     return round(x, 2), round(y, 2), round(z, 2)
 
-# --- UNCHANGED IK LOGIC ---
+# Actual inverse kinematics calculations
 def ik(x, y, z, angles, error):  
     errorI = error
     arm1 = 10
@@ -178,3 +180,71 @@ def move_arm_to(x, y, z, speed=400, acc=300):
     # This takes 0.0001 seconds to run, leaving your main AI loop completely unblocked.
     arm_thread.set_target(x, y, z, speed, acc)
     return True
+
+
+
+
+# ==============================================================
+# GENERATED TEST SCRIPT
+# ==============================================================
+if __name__ == "__main__":
+    print("🤖 Starting RoArm Threaded Controller Test...")
+    time.sleep(1) # Let the thread spin up
+
+    try:
+        # --- TEST 1: Basic Movement ---
+        print("\n▶ TEST 1: Moving to Home Position (10, 0, 10)")
+        move_arm_to(10, 0, 10)
+        time.sleep(2) # Wait for physical arm to arrive
+
+        # --- TEST 2: Direct Joint Control (Jaw) ---
+        print("\n▶ TEST 2: Testing Jaw (Joint 5)")
+        print("Closing Jaw...")
+        move_joint(5, 50) 
+        time.sleep(1)
+        print("Opening Jaw...")
+        move_joint(5, 10)
+        time.sleep(1)
+
+        # --- TEST 3: Sequential Waypoints ---
+        print("\n▶ TEST 3: Executing Waypoint Sequence (Drawing a Square)")
+        waypoints = [
+            (10, 5, 10),
+            (15, 5, 10),
+            (15, -5, 10),
+            (10, -5, 10),
+            (10, 0, 10) # Back to center
+        ]
+        
+        for wx, wy, wz in waypoints:
+            print(f"  -> Moving to X:{wx}, Y:{wy}, Z:{wz}")
+            move_arm_to(wx, wy, wz)
+            time.sleep(1.5) # Give it enough time to reach each point smoothly
+
+        # --- TEST 4: Non-Blocking "Chase" Stress Test ---
+        print("\n▶ TEST 4: Rapid 'Chase' Target Updates")
+        print("Sending new coordinates faster than the arm can finish moving.")
+        print("(Press Ctrl+C at any time to stop safely)")
+        
+        for i in range(10):
+            rx, ry, rz = generate_random_xyz(x_range=(8, 15), y_range=(-10, 10), z_range=(5, 15))
+            print(f"  [Update {i+1}/10] Chasing new target: X:{rx}, Y:{ry}, Z:{rz}")
+            move_arm_to(rx, ry, rz)
+            
+            # Note: We only sleep for 0.5 seconds! The arm likely hasn't reached the 
+            # target yet, but the background thread will gracefully intercept the 
+            # new coordinates and redirect its path smoothly.
+            time.sleep(0.5) 
+
+        # --- CLEANUP ---
+        print("\n✅ Tests Complete. Returning to safe Home position...")
+        move_arm_to(10, 0, 10)
+        time.sleep(2)
+
+    except KeyboardInterrupt:
+        print("\n⚠️ Test manually interrupted by user (Ctrl+C).")
+
+    finally:
+        print("Shutting down controller thread...")
+        arm_thread.running = False
+        print("Done.")
