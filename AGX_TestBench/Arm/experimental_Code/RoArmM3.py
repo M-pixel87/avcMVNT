@@ -1,4 +1,4 @@
-# ls /dev/ttyUSB*
+# THIS ENTIRE FILE IS SUPERCEDED BY RoArm_IK python library. USE THAT INSTEAD OF THIS
 
 from roarm_sdk.roarm import roarm
 import math
@@ -7,15 +7,19 @@ import random
 import threading
 
 class Arm(roarm):
-    def __init__(self):
-        super().__init__(roarm_type="roarm_m3", port="/dev/ttyUSB0", baudrate=115200)
+    '''
+    RoArmM3 wrapper class for serial communication
+    Added Features: Inverse Kinematics
+    '''
+    def __init__(self, port, baudrate):
+        super().__init__(roarm_type="roarm_m3", port=port, baudrate=baudrate)
 
         self.r1 = 10
         self.r2 = 7.5
         self.r3 = 7
 
         self.pos = [0, 0, 0]
-        self.angles = [0, 0, 90, 0, 0, 10]
+        self.angles = [0, 0, 90, 0, -0, 10]
 
     def generate_ik(self, phi, x, y, z):
         phi_rad = math.radians(phi)
@@ -31,11 +35,8 @@ class Arm(roarm):
 
         d = math.sqrt(math.pow(D2x, 2) + math.pow(D2y, 2))
 
-    
         if d > (self.r1 + self.r2):
-            print("Target is out of physical reach!")
             return None
-
 
         a = math.atan2(D2y, D2x)
         b = math.acos((math.pow(self.r1, 2) + math.pow(d, 2) - math.pow(self.r2, 2)) / (2 * self.r1 * d))
@@ -54,26 +55,51 @@ class Arm(roarm):
 
         robot_wrist_deg = 90 - robot_shoulder_deg - robot_elbow_deg - phi
 
-        print(f"Calculated Robot Base: {robot_base_deg:.2f} deg")
-        print(f"Calculated Robot Shoulder: {robot_shoulder_deg:.2f} deg")
-        print(f"Calculated Robot Elbow: {robot_elbow_deg:.2f} deg")
-        print(f"Calculated Robot Wrist: {robot_wrist_deg:.2f} deg")
-
-        return [robot_base_deg, robot_shoulder_deg, robot_elbow_deg, robot_wrist_deg, 0, 10]
+        return [robot_base_deg, robot_shoulder_deg, robot_elbow_deg, robot_wrist_deg, -0, 10]
 
 
 
+    def wait_for_arrival(self, target_angles, tolerance=5.0, timeout=3.0):
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            current_angles = self.joints_angle_get()
+            if current_angles is not None and len(current_angles) >= 4:
+                max_diff = max(abs(current_angles[i] - target_angles[i]) for i in range(4))
+                if max_diff <= tolerance:
+                    break
+            time.sleep(0.05)
 
-    def move_to_xyz(self, phi, x, y, z):
+
+
+    def move_to_xyz(self, phi, x, y, z, wait=True):
         angles = self.generate_ik(phi, x, y, z)
         if angles:
-            self.joints_angle_ctrl(angles,200,50)
+            self.joints_angle_ctrl(angles, 500, 254)
+            if wait:
+                self.wait_for_arrival(angles)
 
 
-
+    # Using steps, traverse from position x1,y1,z1 to x2,y2,z2 in a line
+    def draw_line(self, phi, x1, y1, z1, x2, y2, z2, steps=30):
+        for i in range(steps + 1):
+            t = i / steps
+            cx = x1 + (x2 - x1) * t
+            cy = y1 + (y2 - y1) * t
+            cz = z1 + (z2 - z1) * t
+            angles = self.generate_ik(phi, cx, cy, cz)
+            if angles:
+                self.joints_angle_ctrl(angles, 800, 254)
+            time.sleep(0.05)
+        
+        if angles:
+            self.wait_for_arrival(angles)
 
 if __name__ == "__main__":
-    arm = Arm()
+    arm = Arm(port="/dev/ttyUSB0",baudrate=115200)
     
-    # Example: Wrist flat (20 deg), reaching 10 units forward (X), 0 units left/right (Y), 10 units up (Z)
-    arm.move_to_xyz(30, 10, 2, 10)
+    arm.move_to_xyz(0, 10, -5, 5, wait=True)
+    
+    arm.draw_line(0, 10, -5, 5, 10, 5, 5)
+    arm.draw_line(0, 10, 5, 5, 10, 5, 15)
+    arm.draw_line(0, 10, 5, 15, 10, -5, 15)
+    arm.draw_line(0, 10, -5, 15, 10, -5, 5)
