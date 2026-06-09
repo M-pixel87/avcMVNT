@@ -36,8 +36,7 @@ class DisplaySystem:
         """Forward all attribute/method access to chosen implementation"""
         return getattr(self._impl, name)
     
-
-
+   
 
 class DisplaySystem_YOLO:
     def __init__(self, window_name="YOLO Display"):
