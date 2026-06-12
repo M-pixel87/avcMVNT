@@ -1,9 +1,10 @@
 from rplidar import RPLidar
 from map import map
 import numpy as np
+import cWrapper 
 
 lidar = RPLidar('/dev/ttyUSB0')
-m1 = map(5, 3, 0.05)
+m1 = map(5, 3, 0.20)
 m1.mapDefaultFill()
 
 
@@ -35,53 +36,41 @@ def beam_range_finder_likelihood(scan, pose, m):
 
 
 def update_markov_localization(scan, belief_grid, m):
-    """
-    Executes a clean, simple Markov Localization cycle across a set of 
-    test coordinates, updates the belief grid, and returns the best estimated pose.
-    """
-    # 1. Define search bounds strictly inside the actual size of your map.
-    # Because m1 has dimensions 5.0m x 3.0m, we clip tests safely inside those walls.
-    x_tests = np.arange(0.4, m.xSize * m.res, 0.4)
-    y_tests = np.arange(0.4, m.ySize * m.res, 0.4)
-    theta_tests = np.radians([0, 90, 180, 270])
+    current_scan_likelihood = np.zeros_like(belief_grid)
+    
+    x_tests = np.arange(0.2, m.xSize * m.res, 0.2)
+    y_tests = np.arange(0.2, m.ySize * m.res, 0.2)
+    theta_tests = np.radians([0, 90, 180, 270]) 
     
     best_score = -np.inf
-    best_pose = (1.27, 0.38, 0.0) # Default fallback
+    best_pose = (1.27, 0.38, 0.0)
 
-    # 2. Sweep the test area (The "for all x_t do" from the book)
     for x in x_tests:
         for y in y_tests:
             for theta in theta_tests:
-                # Convert our continuous test position to map grid coordinates
                 gx, gy = m.convertCoordes(x, y)
-                gtheta = int(np.degrees(theta) / 90) % 4
+                gtheta = int(np.round(np.degrees(theta) / 90)) % 4
                 
-                # --- BOUNDARY SAFETY PROTECTION ---
-                # Forces indices to stay strictly within legal 0 to (size - 1) limits
                 gx = max(0, min(gx, m.xSize - 1))
                 gy = max(0, min(gy, m.ySize - 1))
-                # ----------------------------------
                 
-                # Skip computing if this guess lands inside a solid wall
                 if m.checkMap(gx, gy):
-                    belief_grid[gx, gy, gtheta] = 0.0
                     continue
                 
-                # Book Line 2 & 3: Multiply sensor likelihood by the historical cell probability
-                log_p = beam_range_finder_likelihood(scan, (x, y, theta), m)
-                p_z_given_x = np.exp(log_p)
+                log_p = cWrapper.run_c_likelihood(scan, (x, y, theta), m)
+                current_scan_likelihood[gx, gy, gtheta] = np.exp(log_p)
                 
-                belief_grid[gx, gy, gtheta] *= p_z_given_x
-                
-                # Track the highest performing score to extract the robot's state instantly
                 if log_p > best_score:
                     best_score = log_p
                     best_pose = (x, y, theta)
                     
-    # 3. Apply Normalizer (η) to keep the total probability array sum equal to 1.0
+    belief_grid *= current_scan_likelihood
+
     total_sum = np.sum(belief_grid)
     if total_sum > 0:
         belief_grid /= total_sum
+    else:
+        belief_grid[:] = 1.0 / belief_grid.size
         
     return best_pose, belief_grid
 
@@ -101,7 +90,7 @@ def main():
         
         for scan in iter:
             # Drop ray overhead by keeping every 15th laser line
-            shortscan = scan[::15]
+            shortscan = scan[::10]
             
             # Pass everything directly into your standalone function
             robot_pose, belief_grid = update_markov_localization(shortscan, belief_grid, m1)
