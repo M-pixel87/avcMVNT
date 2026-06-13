@@ -52,7 +52,7 @@ float ray_cast(map m, float x, float y, float robot_theta, float ray_angle_deg) 
     return max_cast_range;
 }
 
-# THIS IS REPLACED BY CWRAPPER.py c code. This is old and slow
+
 float beam_range_finder_likelihood(const lidarRay* scan, int scanSize, pose p, map m) {
     float q = 0.0f; // Cumulative log-likelihood score
     
@@ -83,7 +83,7 @@ float beam_range_finder_likelihood(const lidarRay* scan, int scanSize, pose p, m
         
         q += logf(p_total);
     }
-    #--------------------------------------------------------------------------------
+    //--------------------------------------------------------------------------------
     
     return q;
 }
