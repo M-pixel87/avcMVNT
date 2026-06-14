@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('TkAgg') # Force Tk to keep stable on the Pi
 import matplotlib.pyplot as plt
+import time
 
 class LocalizerVisualizer:
     def __init__(self, m):
@@ -10,6 +11,9 @@ class LocalizerVisualizer:
         self.res = m.res
         self.xSize = m.xSize
         self.ySize = m.ySize
+        
+        # Add a frame counter to track when to redraw
+        self.frame_counter = 0
         
         blank_matrix = np.zeros((self.ySize, self.xSize))
         
@@ -33,6 +37,11 @@ class LocalizerVisualizer:
         self.bg = self.fig.canvas.copy_from_bbox(self.fig.bbox)
 
     def update(self, belief_grid):
+        # 1. FRAME THROTTLE: Only process the visual update every 3rd frame
+        self.frame_counter += 1
+        if self.frame_counter % 3 != 0:
+            return
+
         belief_2d = np.sum(belief_grid, axis=2).T
         
         # Update just the raw image array reference structure 
@@ -50,8 +59,11 @@ class LocalizerVisualizer:
         # Push the updated pixels directly onto the active hardware screen buffer
         self.fig.canvas.blit(self.fig.bbox)
         
-        # Flush the local window system GUI queue without introducing timing delays
+        # Flush the local window system GUI queue
         self.fig.canvas.flush_events()
+        
+        # 2. CPU YIELD: Give the OS 1 millisecond to acknowledge the window is still alive
+        time.sleep(0.001)
 
     def close(self):
         plt.close(self.fig)
