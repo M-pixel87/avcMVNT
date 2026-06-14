@@ -1,17 +1,20 @@
-
-
 from rplidar import RPLidar
 from map import map
 import numpy as np
 import cWrapper 
 import plottingBeleif
 
+# Global configuration mode: Set to "C_CALC" or "LUT_LOOKUP"
+MODE = "LUT_LOOKUP"
+
 # Create a map from map.py aswell as communication w lidar
 lidar = RPLidar('/dev/ttyUSB0')
-m1 = map(5, 3, 0.20)
+m1 = map(4, 2.4, 0.20)
 m1.mapDefaultFill()
 
-
+# Trigger precompilation if we are running in table lookup mode
+if MODE == "LUT_LOOKUP":
+    m1.preCompile()
 
 #This function is old and unused, replace by c code
 #This represents the beam model from the book, taking a scan , a pose to test, and a occupancy map for walls.
@@ -53,62 +56,78 @@ def beam_range_finder_likelihood(scan, pose, m):
 
 
 def update_markov_localization(scan, belief_grid, m):
-    #This should give us a even spread of beleif across the grid. 
-    current_scan_likelihood = np.zeros_like(belief_grid)
+    log_likelihood_grid = np.full_like(belief_grid, -np.inf)
     
-    #creates all x and y locations to test, based on step, size, and resolution: creates arrays
     x_tests = np.arange(0.2, m.xSize * m.res, 0.2)
     y_tests = np.arange(0.2, m.ySize * m.res, 0.2)
-    #the dif angles to test
     theta_tests = np.radians([0, 90, 180, 270]) 
     
-    #initalizes the best score as the worst possible score
     best_score = -np.inf
     best_pose = (1.27, 0.38, 0.0)
 
-    #Loop through all x,y, and theta locations to test.
     for x in x_tests:
         for y in y_tests:
             for theta in theta_tests:
-                #convert coordes to match the grid
                 gx, gy = m.convertCoordes(x, y)
                 gtheta = int(np.round(np.degrees(theta) / 90)) % 4
                 
-                #make sure the grid locations are only valid cases
                 gx = max(0, min(gx, m.xSize - 1))
                 gy = max(0, min(gy, m.ySize - 1))
                 
                 if m.checkMap(gx, gy):
                     continue
                 
-                #Run the c compiled likelihood calculator
-                log_p = cWrapper.run_c_likelihood(scan, (x, y, theta), m)
-                #Update the beleif grid with the scores
-                current_scan_likelihood[gx, gy, gtheta] = np.exp(log_p)
+                # Dynamic mode check
+                if MODE == "C_CALC":
+                    log_p = cWrapper.run_c_likelihood(scan, (x, y, theta), m)
+                else:
+                    log_p = 0.0
+                    sigma = 0.15
+                    gaussian_constant = 1.0 / (np.sqrt(2.0 * np.pi) * sigma)
+                    for ray in scan:
+                        actualDist = ray[2] / 1000.0
+                        if actualDist >= 4.0 or actualDist <= 0.1:
+                            continue
+                        ray_angle_deg = int(ray[1]) % 360
+                        expectedDist = m.preCompiledMap[gx, gy, gtheta, ray_angle_deg]
+                        delta = actualDist - expectedDist
+                        p_hit = gaussian_constant * np.exp(-(delta * delta) / (2.0 * sigma * sigma))
+                        p_total = (0.95 * p_hit) + (0.05 * (1.0 / 4.0))
+                        log_p += np.log(p_total)
+
+                log_likelihood_grid[gx, gy, gtheta] = log_p
                 
-                #Update best score with the newest best score
                 if log_p > best_score:
                     best_score = log_p
                     best_pose = (x, y, theta)
-    #Multiply the likelihoods from scan to scan to have a continuingly updated and weighted map
+                    
+    # THE LOG-SHIFT TRICK: Subtract the best score before calculating exp()
+    # This forces the absolute best cell to evaluate to np.exp(0.0) -> 1.0!
+    if best_score != -np.inf:
+        current_scan_likelihood = np.exp(log_likelihood_grid - best_score)
+    else:
+        current_scan_likelihood = np.zeros_like(belief_grid)
+
     belief_grid *= current_scan_likelihood
 
+    # Normalize BEFORE applying diffusion so the signal is safely established
     total_sum = np.sum(belief_grid)
     if total_sum > 0:
-        #Scales the beleif
         belief_grid /= total_sum
     else:
         belief_grid[:] = 1.0 / belief_grid.size
-    
-    #Return the best pose and the beleifGrid
-    return best_pose, belief_grid
 
+    #apply a 5% diffusion to keep the map fluid, this can be replaced by odometry
+    noise_weight = 0.05
+    belief_grid = ((1.0 - noise_weight) * belief_grid) + (noise_weight / belief_grid.size)
+    
+    return best_pose, belief_grid
 
 def main():
     #Run the tkinter visualizer (WIP)
     viz = plottingBeleif.LocalizerVisualizer(m1)
 
-    # Initialize a 3D grid matrix: 100 x 60 x 4 layers deep
+    # Initialize a 3D grid matrix
     num_headings = 4
     belief_grid = np.zeros((m1.xSize, m1.ySize, num_headings))
     
