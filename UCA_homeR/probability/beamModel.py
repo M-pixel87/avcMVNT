@@ -4,7 +4,7 @@ import numpy as np
 import cWrapper 
 import plottingBeleif
 
-# Global configuration mode: Set to "C_CALC" or "LUT_LOOKUP"
+# Global configuration mode: Set to "C_CALC" or "LUT_LOOKUP", this will either use c code or pre compile our map
 MODE = "LUT_LOOKUP"
 
 # Create a map from map.py aswell as communication w lidar
