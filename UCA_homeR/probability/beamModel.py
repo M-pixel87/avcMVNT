@@ -123,42 +123,108 @@ def update_markov_localization(scan, belief_grid, m):
     
     return best_pose, belief_grid
 
-def main():
-    #Run the tkinter visualizer (WIP)
-    viz = plottingBeleif.LocalizerVisualizer(m1)
 
-    # Initialize a 3D grid matrix
-    num_headings = 4
-    belief_grid = np.zeros((m1.xSize, m1.ySize, num_headings))
+
+
+def update_particle_localization(scan, particles, m):
+    """
+    particles: A numpy array of shape (N, 3) representing [x, y, theta]
+    """
+    num_particles = len(particles)
+    log_weights = np.zeros(num_particles)
     
-    # Initialize uniformly (Equal chance of being anywhere at startup)
-    belief_grid[:] = 1.0 / (m1.xSize * m1.ySize * num_headings)
+    # 1. PREDICTION STEP (Motion Model)
+    # Ideally, add odometry (delta x, y, theta) here. 
+    # For now, im adding Gaussian noise to simulate movement/diffusion.
+    noise_std = [0.05, 0.05, np.radians(2.0)] # 5cm and 2 degrees of noise
+    particles += np.random.normal(0, noise_std, size=(num_particles, 3))
+    
+    # Keep particles within map bounds and wrap angles
+    particles[:, 0] = np.clip(particles[:, 0], 0.1, (m.xSize * m.res) - 0.1)
+    particles[:, 1] = np.clip(particles[:, 1], 0.1, (m.ySize * m.res) - 0.1)
+    particles[:, 2] = particles[:, 2] % (2 * np.pi)
 
-    #main loop
+    # 2. UPDATE STEP (Measurement Model)
+    for i in range(num_particles):
+        x, y, theta = particles[i]
+    
+        if MODE == "C_CALC":
+            # Call C wrapper for maximum speed, utelizing same c likelihood as markov 
+            log_weights[i] = cWrapper.run_c_likelihood(scan, (x, y, theta), m)
+        else:
+            # Fallback Python calculation (Highly recommended to use C_CALC for particles)
+            # could implement python portion from markov again, but for now no
+            log_weights[i] = -np.inf # Placeholder
+            
+    # Normalize weights using the log-shift trick to prevent underflow ( rounding down to 0 for really small numbers)
+    # Minusing all log_weights by the best causes the best score to = 0.0 , then , ^0 = 1 , and then devididing all weights
+    # by the total of the weights then the total will add up to 1. Normalizing
+    max_log_weight = np.max(log_weights)
+    if max_log_weight == -np.inf:
+        weights = np.ones(num_particles) / num_particles # Fallback if all are terrible
+    else:
+        weights = np.exp(log_weights - max_log_weight)
+        weights /= np.sum(weights) # Normalize to sum to 1.0
+        
+    # 3. RESAMPLING STEP
+    # Draw indices with replacement, weighted by calculated probabilities
+    indices = np.random.choice(num_particles, size=num_particles, p=weights, replace=True)
+    
+    # Create the new generation of particles
+    resampled_particles = particles[indices]
+    
+    # Estimate the robot's pose (We can just take the mean of the particles)
+    # Note: Mean of angles requires circular mean, but for simplicity, we'll take 
+    # the pose of the highest weighted particle before resampling.
+    best_idx = np.argmax(weights)
+    estimated_pose = particles[best_idx]
+    
+    return estimated_pose, resampled_particles
+
+
+
+def main():
+    mode = "particle" # Switched to particle mode
+    
+    if mode == "markov":
+        viz = plottingBeleif.LocalizerVisualizer(m1)
+        num_headings = 4
+        belief_grid = np.zeros((m1.xSize, m1.ySize, num_headings))
+        belief_grid[:] = 1.0 / (m1.xSize * m1.ySize * num_headings)
+    elif mode == "particle":
+        # Initialize N particles randomly spread across the map
+        num_particles = 500
+        particles = np.zeros((num_particles, 3))
+        particles[:, 0] = np.random.uniform(0.2, (m1.xSize * m1.res) - 0.2, num_particles)
+        particles[:, 1] = np.random.uniform(0.2, (m1.ySize * m1.res) - 0.2, num_particles)
+        particles[:, 2] = np.random.uniform(0, 2 * np.pi, num_particles)
+        
+        # viz = plottingBeleif.ParticleVisualizer(m1) 
+
     try:
         lidar.clean_input()
         iter = lidar.iter_scans()
-        print("Markov Function Active. Streaming LiDAR data...")
-        #get and loop through each ray per scan
+        print(f"Streaming LiDAR data in {mode} mode...")
+        
         for scan in iter:
-            #Reduce scan count to only 1/10 of original size for performance reasons
             shortscan = scan[::10]
             
-            # oass the scans, beleif grid we made, and out map into the localization func. Returns pose and grid
-            robot_pose, belief_grid = update_markov_localization(shortscan, belief_grid, m1)
-            
-            # Extract values, and update the visualizer
-            rx, ry, rtheta = robot_pose
-            viz.update(belief_grid)
-
+            if mode == "markov":
+                robot_pose, belief_grid = update_markov_localization(shortscan, belief_grid, m1)
+                rx, ry, rtheta = robot_pose
+                viz.update(belief_grid)
+                
+            elif mode == "particle":
+                robot_pose, particles = update_particle_localization(shortscan, particles, m1)
+                rx, ry, rtheta = robot_pose
+                # viz.update_particles(particles) # Update visualizer
             
             print(f"Estimated Pose -> X: {rx:.2f}m, Y: {ry:.2f}m, Heading: {int(np.degrees(rtheta))}°")
-        
+            
     except KeyboardInterrupt:
         print("\nClosing connection safely...")
         lidar.stop()
         lidar.disconnect()
-
 
 if __name__ == "__main__":
     main()
