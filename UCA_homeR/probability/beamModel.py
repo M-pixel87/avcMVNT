@@ -3,11 +3,21 @@ from map import map
 import numpy as np
 import cWrapper 
 import plottingBeleif
+import serial
+import random
 
-# Global configuration mode: Set to "C_CALC" or "LUT_LOOKUP", this will either use c code or pre compile our map
-MODE = "LUT_LOOKUP"
+# --- System Configuration ---
+MODE = "LUT_LOOKUP" # Set to "C_CALC" or "LUT_LOOKUP"
 
-# Create a map from map.py aswell as communication w lidar
+# --- Hardware Configuration ---
+ser = serial.Serial("/dev/ttyACM0", 115200, timeout=0.1)
+
+# Robot Kinematic Constants
+WHEEL_RADIUS = 0.033     # Meters 
+WHEEL_BASE = 0.15        # Meters (distance between track centers)
+TICKS_PER_REV = 360      # Encoder resolution
+
+# Create a map from map.py as well as communication w lidar
 lidar = RPLidar('/dev/ttyUSB0')
 m1 = map(4, 2.4, 0.20)
 m1.mapDefaultFill()
@@ -16,43 +26,30 @@ m1.mapDefaultFill()
 if MODE == "LUT_LOOKUP":
     m1.preCompile()
 
-#This function is old and unused, replace by c code
-#This represents the beam model from the book, taking a scan , a pose to test, and a occupancy map for walls.
+
 def beam_range_finder_likelihood(scan, pose, m):
     x, y, theta = pose
-    #q is the returned likeilhood
     q = 0.0  
     
-    #These represent some of the variables for the guassian, aswell as the added noise
     sigma = 0.15          
     z_rand_weight = 0.05  
     z_hit_weight = 0.95   
     max_range = 4.0       
     
-    #This is the normalizer/guassian constant
     gaussian_constant = 1.0 / (np.sqrt(2 * np.pi) * sigma)
     
-    #Loops through each ray from a single rotation, running our raycast.
     for ray in scan:
-        #gets the distance to the wall from the scan
         actualDist = ray[2] / 1000.0 
         if actualDist >= max_range or actualDist <= 0.1:
             continue
-        #calculates/determines the dist to the wall from the maps view (as it should be)
+            
         exspectedDist = m.rayCast(ray, x, y, theta)
-        
-        #p_hit calculates the guassian probability for the error between the expected and actual
         p_hit = gaussian_constant * np.exp(-(actualDist - exspectedDist)**2 / (2 * sigma**2))
         p_rand = 1.0 / max_range
-        #This scales the hit chance and random noise based on the variables listed above
         p_total = (z_hit_weight * p_hit) + (z_rand_weight * p_rand)
-        
-        # Utelizing log makes the numbers much easier to use, adds up all of the probabilities (closer to 0 better)
         q += np.log(p_total)
         
     return q
-#----------------------------------------------------------------------------------------------
-
 
 
 def update_markov_localization(scan, belief_grid, m):
@@ -77,7 +74,6 @@ def update_markov_localization(scan, belief_grid, m):
                 if m.checkMap(gx, gy):
                     continue
                 
-                # Dynamic mode check
                 if MODE == "C_CALC":
                     log_p = cWrapper.run_c_likelihood(scan, (x, y, theta), m)
                 else:
@@ -101,8 +97,7 @@ def update_markov_localization(scan, belief_grid, m):
                     best_score = log_p
                     best_pose = (x, y, theta)
                     
-    # THE LOG-SHIFT TRICK: Subtract the best score before calculating exp()
-    # This forces the absolute best cell to evaluate to np.exp(0.0) -> 1.0!
+    # Log-shift normalization
     if best_score != -np.inf:
         current_scan_likelihood = np.exp(log_likelihood_grid - best_score)
     else:
@@ -110,36 +105,36 @@ def update_markov_localization(scan, belief_grid, m):
 
     belief_grid *= current_scan_likelihood
 
-    # Normalize BEFORE applying diffusion so the signal is safely established
     total_sum = np.sum(belief_grid)
     if total_sum > 0:
         belief_grid /= total_sum
     else:
         belief_grid[:] = 1.0 / belief_grid.size
 
-    #apply a 5% diffusion to keep the map fluid, this can be replaced by odometry
+    # Apply diffusion 
     noise_weight = 0.05
     belief_grid = ((1.0 - noise_weight) * belief_grid) + (noise_weight / belief_grid.size)
     
     return best_pose, belief_grid
 
 
-
-
-def update_particle_localization(scan, particles, m):
-    """
-    particles: A numpy array of shape (N, 3) representing [x, y, theta]
-    """
+def update_particle_localization(scan, particles, m, d_center, d_theta):
     num_particles = len(particles)
     log_weights = np.zeros(num_particles)
     
-    # 1. PREDICTION STEP (Motion Model)
-    # Ideally, add odometry (delta x, y, theta) here. 
-    # For now, im adding Gaussian noise to simulate movement/diffusion.
-    noise_std = [0.05, 0.05, np.radians(2.0)] # 5cm and 2 degrees of noise
+    # 1. PREDICTION STEP (Odometry Motion Model)
+    particles[:, 0] += d_center * np.cos(particles[:, 2])
+    particles[:, 1] += d_center * np.sin(particles[:, 2])
+    particles[:, 2] += d_theta
+    
+    # Add proportional noise based on movement
+    noise_x_y = abs(d_center) * 0.10 + 0.01 
+    noise_th = abs(d_theta) * 0.05 + np.radians(0.5) 
+    
+    noise_std = [noise_x_y, noise_x_y, noise_th]
     particles += np.random.normal(0, noise_std, size=(num_particles, 3))
     
-    # Keep particles within map bounds and wrap angles
+    # Bound constraints
     particles[:, 0] = np.clip(particles[:, 0], 0.1, (m.xSize * m.res) - 0.1)
     particles[:, 1] = np.clip(particles[:, 1], 0.1, (m.ySize * m.res) - 0.1)
     particles[:, 2] = particles[:, 2] % (2 * np.pi)
@@ -149,42 +144,33 @@ def update_particle_localization(scan, particles, m):
         x, y, theta = particles[i]
     
         if MODE == "C_CALC":
-            # Call C wrapper for maximum speed, utelizing same c likelihood as markov 
             log_weights[i] = cWrapper.run_c_likelihood(scan, (x, y, theta), m)
         else:
-            # Fallback Python calculation (Highly recommended to use C_CALC for particles)
-            # could implement python portion from markov again, but for now no
-            log_weights[i] = -np.inf # Placeholder
+            log_weights[i] = -np.inf # Fallback Placeholder
             
-    # Normalize weights using the log-shift trick to prevent underflow ( rounding down to 0 for really small numbers)
-    # Minusing all log_weights by the best causes the best score to = 0.0 , then , ^0 = 1 , and then devididing all weights
-    # by the total of the weights then the total will add up to 1. Normalizing
+    # Normalize weights using log-shift
     max_log_weight = np.max(log_weights)
     if max_log_weight == -np.inf:
-        weights = np.ones(num_particles) / num_particles # Fallback if all are terrible
+        weights = np.ones(num_particles) / num_particles 
     else:
         weights = np.exp(log_weights - max_log_weight)
-        weights /= np.sum(weights) # Normalize to sum to 1.0
+        weights /= np.sum(weights) 
         
     # 3. RESAMPLING STEP
-    # Draw indices with replacement, weighted by calculated probabilities
     indices = np.random.choice(num_particles, size=num_particles, p=weights, replace=True)
-    
-    # Create the new generation of particles
     resampled_particles = particles[indices]
     
-    # Estimate the robot's pose (We can just take the mean of the particles)
-    # Note: Mean of angles requires circular mean, but for simplicity, we'll take 
-    # the pose of the highest weighted particle before resampling.
     best_idx = np.argmax(weights)
     estimated_pose = particles[best_idx]
     
     return estimated_pose, resampled_particles
 
 
-
 def main():
-    mode = "particle" # Switched to particle mode
+    mode = "particle"
+    
+    prev_ticks_left = 0
+    prev_ticks_right = 0
     
     if mode == "markov":
         viz = plottingBeleif.LocalizerVisualizer(m1)
@@ -192,7 +178,6 @@ def main():
         belief_grid = np.zeros((m1.xSize, m1.ySize, num_headings))
         belief_grid[:] = 1.0 / (m1.xSize * m1.ySize * num_headings)
     elif mode == "particle":
-        # Initialize N particles randomly spread across the map
         num_particles = 500
         particles = np.zeros((num_particles, 3))
         particles[:, 0] = np.random.uniform(0.2, (m1.xSize * m1.res) - 0.2, num_particles)
@@ -209,22 +194,61 @@ def main():
         for scan in iter:
             shortscan = scan[::10]
             
+            # Odometry Delta Parsing
+            d_center = 0.0
+            d_theta = 0.0
+            
+
+            # read any data that has been sent
+            
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8').strip()
+                try:
+                    curr_ticks_left, curr_ticks_right = (line.split())
+                    print(curr_ticks_left)
+                    curr_ticks_left_f = float(curr_ticks_left)
+                    curr_ticks_right_f = float(curr_ticks_right)
+                    delta_left = curr_ticks_left_f - prev_ticks_left
+                    delta_right = curr_ticks_right_f - prev_ticks_right
+                    
+                    prev_ticks_left = curr_ticks_left_f
+                    prev_ticks_right = curr_ticks_right_f
+                    
+                    dist_left = 2 * np.pi * WHEEL_RADIUS * (delta_left / TICKS_PER_REV)
+                    dist_right = 2 * np.pi * WHEEL_RADIUS * (delta_right / TICKS_PER_REV)
+                    
+                    d_center = (dist_left + dist_right) / 2.0
+                    d_theta = (dist_right - dist_left) / WHEEL_BASE
+                    
+                except ValueError:
+                    pass # Ignore malformed serial reads
+            
+
+
             if mode == "markov":
                 robot_pose, belief_grid = update_markov_localization(shortscan, belief_grid, m1)
                 rx, ry, rtheta = robot_pose
                 viz.update(belief_grid)
                 
             elif mode == "particle":
-                robot_pose, particles = update_particle_localization(shortscan, particles, m1)
+                robot_pose, particles = update_particle_localization(shortscan, particles, m1, d_center, d_theta)
                 rx, ry, rtheta = robot_pose
-                # viz.update_particles(particles) # Update visualizer
+                # viz.update_particles(particles)
             
             print(f"Estimated Pose -> X: {rx:.2f}m, Y: {ry:.2f}m, Heading: {int(np.degrees(rtheta))}°")
+            
+            # Transmit Motor Commands (Placeholder logic)
+            left_speed = 0.5 
+            right_speed = 0.5
+            command_str = f"{left_speed} {right_speed}\n"
+            ser.write(command_str.encode('utf-8'))
             
     except KeyboardInterrupt:
         print("\nClosing connection safely...")
         lidar.stop()
         lidar.disconnect()
+        ser.write(b"0.0 0.0\n") 
+        ser.close()
 
 if __name__ == "__main__":
     main()
