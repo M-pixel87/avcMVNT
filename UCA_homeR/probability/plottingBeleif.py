@@ -67,3 +67,63 @@ class LocalizerVisualizer:
 
     def close(self):
         plt.close(self.fig)
+
+
+class ParticleVisualizer:
+    def __init__(self, m):
+        plt.ion()  
+        self.fig, self.ax = plt.subplots(figsize=(8, 5))
+        self.res = m.res
+        self.xSize = m.xSize
+        self.ySize = m.ySize
+        
+        self.frame_counter = 0
+        
+        # Set static map limits
+        self.ax.set_xlim(0, self.xSize * self.res)
+        self.ax.set_ylim(0, self.ySize * self.res)
+        
+        # Initialize scatter plots for particles and the best estimate
+        self.particles_scatter = self.ax.scatter([], [], c='red', s=5, alpha=0.5)
+        self.best_pose_scatter = self.ax.scatter([], [], c='blue', s=40, marker='*')
+        
+        self.ax.set_title("Monte Carlo Particle Filter Localization")
+        self.ax.set_xlabel("X Position (meters)")
+        self.ax.set_ylabel("Y Position (meters)")
+        
+        # Render the initial frame completely once
+        self.fig.canvas.draw()
+        plt.show(block=False)
+        
+        # Cache the static background
+        self.bg = self.fig.canvas.copy_from_bbox(self.fig.bbox)
+
+    def update_particles(self, particles, best_pose=None):
+        # 1. FRAME THROTTLE
+        self.frame_counter += 1
+        if self.frame_counter % 3 != 0:
+            return
+
+        # Update X and Y coordinates (ignoring Theta for the scatter plot)
+        self.particles_scatter.set_offsets(particles[:, :2])
+        
+        if best_pose is not None:
+            self.best_pose_scatter.set_offsets([[best_pose[0], best_pose[1]]])
+        
+        # Restore background
+        self.fig.canvas.restore_region(self.bg)
+        
+        # Draw artists
+        self.ax.draw_artist(self.particles_scatter)
+        if best_pose is not None:
+            self.ax.draw_artist(self.best_pose_scatter)
+            
+        # Blit and flush
+        self.fig.canvas.blit(self.fig.bbox)
+        self.fig.canvas.flush_events()
+        
+        # 2. CPU YIELD
+        time.sleep(0.001)
+
+    def close(self):
+        plt.close(self.fig)
