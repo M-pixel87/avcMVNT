@@ -1,5 +1,13 @@
+'''
+This code is just for sending basic commands to a microcontroller, primarily to the pico2
+on the homer robat for motor control commands in the format : speed_right speed_left
+'''
+
+
 import serial
 import time
+
+reading = False
 
 # Connect to the Pico
 try:
@@ -11,11 +19,12 @@ except Exception as e:
 
 while True:
     try:
-        # Send a dummy motor command so the Pico's read buffer doesn't freeze
-        ser.write(b"0.5 0.5\n")
+        command = input() + "\n"
+        bcommand = command.encode("utf-8")
+        ser.write(bcommand)
         
         # Read whatever the Pico spits back
-        if ser.in_waiting > 0:
+        if ser.in_waiting > 0 and reading:
             line = ser.readline().decode('utf-8', errors='ignore').strip()
             print(f"PICO SAYS: {line}")
             
