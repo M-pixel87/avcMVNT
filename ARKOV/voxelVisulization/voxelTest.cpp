@@ -10,8 +10,17 @@ aswell as the localization and loops.
 #include <iostream>
 #include <vector>
 #include <cstdint> 
+#include <cmath>
 
 // using struct for less boilerplate
+struct Point {
+    double x,y,z;
+};
+
+struct Particle {
+    double x,y,z,theta;
+};
+
 struct VoxelGrid {
     int sizeX, sizeY, sizeZ;
     double resolution; 
@@ -37,13 +46,22 @@ struct VoxelGrid {
         }
         return 0; 
     }
+    
+    void metricToGrid(double x, double y, double z , int& gridX, int& gridY, int& gridZ){
+        gridX = static_cast<int>(std::round(x / resolution));
+        gridY = static_cast<int>(std::round(y / resolution));
+        gridZ = static_cast<int>(std::round(z / resolution));
+    }
 };
 
 int main() {
     VoxelGrid map(100, 100, 50, 0.1);
+
+    std::vector<Point> fakeScan{
+        {2.0, 0.1, 0.0},
+        {3.0, 2.0, 0.0}
+    }
     
-    // Example: LiDAR point registers an obstacle hit
-    map.setVoxel(50, 50, 10, 1);
     
     std::cout << "Is obstacle present: " << (int)map.getVoxel(50, 50, 10) << std::endl;
     return 0;
