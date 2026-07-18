@@ -6,21 +6,22 @@ class map:
         self.xSize = int(xSize/res)
         self.ySize = int(ySize/res)
         self.mapAr = np.zeros((self.xSize,self.ySize),dtype= int)
+
+        self.layers = 4
+        self.preCompiledMap = np.zeros((self.xSize,self.ySize,self.layers,360),dtype= np.float32)
+        self.thetaArray = [0,90,180,270]
+
         self.mapDefaultFill()
     
     def updateMap(self,x,y,value):
         self.mapAr[x][y] = value
 
     def mapDefaultFill(self):
-        # Inches to meters
-        width_m = 50 * 0.0254
-        length_m = 160 * 0.0254
-    
-        max_grid_x, max_grid_y = self.convertCoordes(width_m, length_m)
-        
-        max_grid_x = min(max_grid_x, self.xSize - 1)
-        max_grid_y = min(max_grid_y, self.ySize - 1)
+        # Drop the hardcoded inch calculations so walls line up with array edges
+        max_grid_x = self.xSize - 1
+        max_grid_y = self.ySize - 1
 
+        # Paint outer edge bounds cleanly
         for gx in range(0, max_grid_x + 1):
             self.updateMap(gx, 0, 1)           # Bottom Wall
             self.updateMap(gx, max_grid_y, 1)    # Top Wall
@@ -46,8 +47,8 @@ class map:
         quality, angle, dist = ray
         globalRot = np.radians(theta + angle)
         
-        dx = self.res * np.cos(globalRot)
-        dy = self.res * np.sin(globalRot)
+        dx = (self.res*0.25) * np.cos(globalRot)
+        dy = (self.res*0.25) * np.sin(globalRot)
      
         cx = x
         cy = y
@@ -72,3 +73,13 @@ class map:
             
         dist = np.sqrt((cx-x)**2 + (cy-y)**2)
         return dist
+    
+    def preCompile(self):
+        for i in range(self.xSize):
+            for j in range(self.ySize):
+                x = i * self.res + (self.res / 2.0)
+                y = j * self.res + (self.res / 2.0)
+                for k in range(self.layers):
+                    for n in range(360):
+                        tempRay = (1,n,0)
+                        self.preCompiledMap[i][j][k][n] = self.rayCast(tempRay,x,y,k)
