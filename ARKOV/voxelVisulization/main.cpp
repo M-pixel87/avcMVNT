@@ -1,5 +1,8 @@
 #include "voxel_map.hh"
 #include <iostream>
+/*
+This is really just a test script for testing voxel grid and brensenhams algoirthm 7/18/26
+*/
 
 int main() {
     VoxelGrid map(100, 100, 50, 0.1);
