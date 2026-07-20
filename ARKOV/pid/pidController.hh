@@ -14,8 +14,8 @@ private:
     float integral = 0.0f;
     float deriv = 0.0f;
 
-    static constexpr float MAX_OUTPUT = 255.0f;
-    static constexpr float MIN_OUTPUT = -255.0f;
+    static constexpr float MAX_OUTPUT = 255.0f; // these can be changed for whatever were controlling
+    static constexpr float MIN_OUTPUT = -255.0f; 
 
 public:
     pidController(float p, float i, float d);

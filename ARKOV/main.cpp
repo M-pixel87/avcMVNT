@@ -7,10 +7,13 @@ c++ systems.
 #include "voxel_map.hh"
 #include "microControllerCom.h"
 #include "driveOdometry.h"
+#include "pidController.hh"
 
 microcontroller stm32(); // create serial com with stm32
 VoxelGrid map(100,100,50,0.1); // create voxel map
 driveOdometry encoderHandler(); // create math calculator for odometry
+pidController leftPID(0.30, 0.05, 0.10); // create pid controller for left motor
+pidController rightPID(0.30, 0.05, 0.10); // create pid controller for right motor
 
 int main(){
 

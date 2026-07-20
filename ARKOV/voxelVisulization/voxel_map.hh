@@ -1,23 +1,11 @@
 #ifndef VOXEL_MAP_HH
 #define VOXEL_MAP_HH
 
-#include <vector>
+
 #include <cstdint>
 #include "types.hh"
 
-// Pure data structures , may move to types.hh
-struct Point {
-    double x, y, z;
-};
 
-struct GridCoord {
-    int x, y, z;
-};
-
-struct Particle {
-    double x, y, z, theta;
-};
-//-----------------------------------
 
 // Voxel Grid Structure Definition
 struct VoxelGrid {

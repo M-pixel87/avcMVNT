@@ -12,7 +12,7 @@ void pidController::setPoint(float newSetPoint){
 }
 
 float pidController::calculate(float value, float deltaT){
-    if(deltaT <= 0.0f) { return 0.0f; }
+    if(deltaT <= 0.0f) { return 0.0f; } // this stops an explosion of the algorithm
     
     error = setpoint - value;
     
