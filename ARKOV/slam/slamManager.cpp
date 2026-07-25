@@ -1,8 +1,7 @@
 #include "slamManager.hh"
 
 // Constructor takes pointers to the components it needs to coordinate
-slamManager::slamManager(particleFilter* p_filter, driveOdometry* d_odom, 
-                         VoxelMap* v_map, Lidar* l_sensor) {
+slamManager::slamManager(particleFilter* p_filter, driveOdometry* d_odom, VoxelMap* v_map, Lidar* l_sensor) {
     pf = p_filter;
     driveOdom = d_odom;
     map = v_map;
@@ -20,8 +19,7 @@ void slamManager::startUp() {
     for (const auto& pt : scan) {
         // You'll need to transform the raw point based on bestP (like we did in updateWeights)
         // Then pass the sensor origin and the point endpoint to Bresenham
-        map->bresenham3D(bestP.x, bestP.y, SENSOR_Z_OFFSET,  // Ray start (LiDAR position)
-                         pt.world_x, pt.world_y, pt.world_z); // Ray end (Hit point)
+        map->bresenham3D(bestP.x, bestP.y, SENSOR_Z_OFFSET, pt.world_x, pt.world_y, pt.world_z); // Ray end (Hit point)
     }
 }
 
