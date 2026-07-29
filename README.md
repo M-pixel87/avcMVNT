@@ -12,6 +12,16 @@ The AGX_TestBench directory is for development on our bench setup for the ro-arm
 
 UCA_homeR is code made for the homer bot provided to us by UCA: University of Central Arkansas at a workshop event.
 
+### ARKOV
+Arkov code utelized doxygen compatible comments, this allows the use of doxygen for generating html and pdf documentation for the codebase. 
+
+Code is seperated into groups.
+- SLAM
+- MOVEMENT
+- more....
+
+<br>
+
 ## Contact Info
 
 If you need help reach out to : hreeve01@uafs.edu
