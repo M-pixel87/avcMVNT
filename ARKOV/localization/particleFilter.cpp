@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <limits>
 
+/*!
+    \addtogroup SLAM
+*/
+
 particleFilter::particleFilter(int count, float start_x, float start_y, float start_theta) {
     num_particles = count;
     std::random_device rd;
@@ -141,3 +145,5 @@ void particleFilter::resample() {
 
     particles = resampled_particles;
 }
+
+//! @}

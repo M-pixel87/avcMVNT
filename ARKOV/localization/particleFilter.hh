@@ -3,6 +3,10 @@
 #include <random>
 #include <vector>
 
+/*!
+    \addtogroup SLAM
+*/
+
 class particleFilter{
 
 public:
@@ -39,3 +43,5 @@ private:
     static constexpr float EMPTY_SCORE = -0.1f;
 
 };
+
+//! @}

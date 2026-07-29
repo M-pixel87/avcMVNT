@@ -5,9 +5,12 @@
 #include <cstdint>
 #include "types.hh"
 
+/*!
+    \addtogroup SLAM
+*/
 
 
-// Voxel Grid Structure Definition
+//! Voxel Grid Structure Definition
 struct VoxelGrid {
     int sizeX, sizeY, sizeZ;
     double resolution; 
@@ -27,7 +30,8 @@ struct VoxelGrid {
     void metricToGrid(double x, double y, double z, int& gridX, int& gridY, int& gridZ);
 };
 
-// Important function for traversing 3d voxel world
+//! Line algorithm for getting what voxels have been passed through
 std::vector<GridCoord> brensenhamsLineAlgorithm(int x1, int y1, int z1, int x2, int y2, int z2);
 
 #endif 
+//! @}

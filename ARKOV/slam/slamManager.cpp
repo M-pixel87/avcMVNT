@@ -1,5 +1,10 @@
 #include "slamManager.hh"
 
+/*!
+    \addtogroup SLAM
+    @{
+*/
+
 // Constructor takes pointers to the components it needs to coordinate
 slamManager::slamManager(particleFilter* p_filter, driveOdometry* d_odom, VoxelMap* v_map, Lidar* l_sensor) {
     pf = p_filter;
@@ -39,3 +44,5 @@ void slamManager::update() {
         // map->bresenham3D(...);
     }
 }
+
+//! @}

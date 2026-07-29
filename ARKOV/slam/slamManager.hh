@@ -1,5 +1,9 @@
 #pragma once
 
+/*!
+    \defgroup SLAM
+    @{
+*/
 
 class voxel_map;
 class particleFilter;
@@ -19,3 +23,5 @@ private:
     voxel_map* map;
     lidar* ld;
 };
+
+//! @}

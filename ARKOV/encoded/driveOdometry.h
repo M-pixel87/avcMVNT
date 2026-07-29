@@ -1,6 +1,11 @@
 #pragma once
 #include "types.hh"
 
+/*!
+    \defgroup MOVEMENT
+    @{
+*/
+
 class driveOdometry{
 private:
     static constexpr float PI = 3.14159265f;
@@ -18,3 +23,4 @@ public:
     OdometryDelta calcDistanceTraveled(int curTicsL , int curTicsR);
     
 };
+//! @}
