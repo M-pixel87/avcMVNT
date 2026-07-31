@@ -34,7 +34,7 @@ def check_neihbors():
         que.append((curx+1,cury))
         queued.add((curx+1,cury))
         
-    # Check up
+    # Check down
     if cury+1 < ysize and map[curx][cury+1] not in (1, 2) and (curx, cury+1) not in queued:
         que.append((curx,cury+1))
         queued.add((curx, cury+1))
@@ -44,7 +44,7 @@ def check_neihbors():
         que.append((curx-1,cury))
         queued.add((curx-1, cury))
         
-    # Check down 
+    # Check up 
     if cury-1 >= 0 and map[curx][cury-1] not in (1, 2) and (curx, cury-1) not in queued:
         que.append((curx,cury-1))
         queued.add((curx, cury-1))
