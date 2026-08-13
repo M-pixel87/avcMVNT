@@ -47,6 +47,8 @@ class cvWebcam:
             self.initialized = False
             print("cvWebcam released.")
 
+
+
 if __name__ == "__main__":
     cam = cvWebcam()
     cv2.namedWindow("camFeed", cv2.WINDOW_NORMAL)
