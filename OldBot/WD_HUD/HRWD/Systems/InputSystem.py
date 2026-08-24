@@ -581,10 +581,9 @@ class AI_Inputs:
                         if self.ball_grabbed: 
                             print("BALL DROPPED -> BACKING UP & SEEKING NEXT TARGET") 
                             self.ball_grabbed = False 
-                            self.count += 1 
-                            if self.count >= 4:
+                            self.count += 1   
+                            if(self.count >= 4):
                                 self.count = 0
-                            
                         else: 
                             print("GRAB COMPLETE -> BACKING UP FOR VERIFICATION") 
                             self.verifying_grab = True  
