@@ -678,7 +678,7 @@ class AI_Inputs:
                     self.dynamic_wander_duration = self.wander_base_duration 
                     if max_dist > 0: 
                         self.dynamic_wander_duration += max_dist * self.wander_dist_scalar 
-                        print(f"📈 Scaled wander duration to {self.dynamic_wander_duration:.2f}s (Max dist: {max_dist}mm)") 
+                        print(f" Scaled wander duration to {self.dynamic_wander_duration:.2f}s (Max dist: {max_dist}mm)") 
 
                 self.data = {"L": -self.spin_speed, "R": self.spin_speed} if self.last_target_x > (self.frame_width / 2) else {"L": self.spin_speed, "R": -self.spin_speed}  
                 return self.data 
