@@ -2,49 +2,56 @@
 #include <cmath>
 #include <cstdlib>
 
-/*!
-    \addtogroup SLAM
-*/
-
-//! Voxel Struct constructor, compiled values using member list initalizer
 VoxelGrid::VoxelGrid(int x, int y, int z, double res) 
     : sizeX(x), sizeY(y), sizeZ(z), resolution(res), data(x * y * z, 0) {}
 
-//! set voxel occupancy value to value
 void VoxelGrid::setVoxel(int x, int y, int z, uint8_t value) {
     if (x >= 0 && x < sizeX && y >= 0 && y < sizeY && z >= 0 && z < sizeZ) {
         data[getIndex(x, y, z)] = value;
     }
 }
 
-//! Update voxel occupancy value with penalty value
-void updateVoxelMiss(int x, int y, int z, uint8_t penalty) {
+
+void VoxelGrid::updateVoxelMiss(int x, int y, int z, uint8_t penalty) {
     if (x >= 0 && x < sizeX && y >= 0 && y < sizeY && z >= 0 && z < sizeZ) {
         uint8_t& voxel = data[getIndex(x, y, z)];
         voxel = (voxel > penalty) ? (voxel - penalty) : 0;
     }
 }
-//! Update voxel occupancy value with reward value
-void updateVoxelHit(int x, int y, int z, uint8_t reward) {
+
+void VoxelGrid::updateVoxelHit(int x, int y, int z, uint8_t reward) {
     if (x >= 0 && x < sizeX && y >= 0 && y < sizeY && z >= 0 && z < sizeZ) {
         uint8_t& voxel = data[getIndex(x, y, z)];
         voxel = (255 - voxel > reward) ? (voxel + reward) : 255;
     }
 }
 
-//! Return voxel occupancy value
 uint8_t VoxelGrid::getVoxel(int x, int y, int z) const {
     if (x >= 0 && x < sizeX && y >= 0 && y < sizeY && z >= 0 && z < sizeZ) {
         return data[getIndex(x, y, z)];
     }
-    return 0; 
+    return 0;
 }
 
-//! Convert meters to grid space
-void VoxelGrid::metricToGrid(double x, double y, double z, int& gridX, int& gridY, int& gridZ) {
+void VoxelGrid::metricToGrid(double x, double y, double z, int& gridX, int& gridY, int& gridZ) const {
     gridX = static_cast<int>(std::round(x / resolution));
     gridY = static_cast<int>(std::round(y / resolution));
     gridZ = static_cast<int>(std::round(z / resolution));
+}
+
+void VoxelGrid::bresenham3D(double x1, double y1, double z1, double x2, double y2, double z2) {
+    int gx1, gy1, gz1, gx2, gy2, gz2;
+    metricToGrid(x1, y1, z1, gx1, gy1, gz1);
+    metricToGrid(x2, y2, z2, gx2, gy2, gz2);
+    
+    std::vector<GridCoord> line = brensenhamsLineAlgorithm(gx1, gy1, gz1, gx2, gy2, gz2);
+    for (size_t i = 0; i < line.size(); ++i) {
+        if (i == line.size() - 1) {
+            updateVoxelHit(line[i].x, line[i].y, line[i].z, 10);
+        } else {
+            updateVoxelMiss(line[i].x, line[i].y, line[i].z, 2);
+        }
+    }
 }
 
 std::vector<GridCoord> brensenhamsLineAlgorithm(int x1, int y1, int z1, int x2, int y2, int z2) {
