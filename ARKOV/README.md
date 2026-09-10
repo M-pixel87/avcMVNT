@@ -8,3 +8,14 @@ The vehicle is an autonomously driving rover with kinematics (arm) , odometry (w
 The documentation is to be compatible with doxygen. Learn more about it if needed: https://www.doxygen.nl/index.html
 
 
+## Building
+To build the programs first create a build directory 
+    'mkdir build'
+    'cd build'
+
+Then run cmake to generate the make files
+    'cmake ../'
+
+last run the make file
+    'make -j#'
+

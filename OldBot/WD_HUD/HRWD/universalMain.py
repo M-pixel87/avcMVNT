@@ -18,13 +18,6 @@ import cv2
 # --- GLOBAL Variables ---
 inputState = modeState()
 
-# --- IMAGE SAVING SETUP ---
-# This forces the folder to be created exactly where this Python script lives
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SAVE_DIR = os.path.join(SCRIPT_DIR, "captured_images")
-os.makedirs(SAVE_DIR, exist_ok=True)
-
-
 
 last_save_time = time.time()
 image_counter = 0
