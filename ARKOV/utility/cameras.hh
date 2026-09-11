@@ -3,18 +3,17 @@
 
 #include <opencv2/opencv.hpp>
 
-class cv_Webcam{
-
+class cv_Webcam {
 public:
-cv_Webcam(int cam_ID);
-bool update_frame(cv::Mat& frame);
-void display_frame(cv::Mat& frame);
-void cleanup();
+    explicit cv_Webcam(int cam_ID);
+    ~cv_Webcam() { cleanup(); } 
 
-    
+    bool update_frame(cv::Mat& frame);
+    void display_frame(const cv::Mat& frame);
+    void cleanup();
+
 private:
-cv::VideoCapture cap;
-
+    cv::VideoCapture cap;
 };
 
-#endif 
+#endif // CAMERAS_HH

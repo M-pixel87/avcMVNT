@@ -5,23 +5,23 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include(FetchContent)
-FetchContent_Declare(
-    opencv
-    GIT_REPOSITORY https://github.com/opencv/opencv.git
-    GIT_TAG 5.x
-)
-FetchContent_MakeAvailable(opencv)
+# 1. Locate system OpenCV (pre-installed on Jetson)
+find_package(OpenCV REQUIRED)
 
-# Specify global include directories for your headers
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-# Build the standalone Polyscope visualization demo
+# 2. Build executable
+# If you have a separate main.cpp testing cv_Webcam, add it here alongside cameras.cpp
 add_executable(cameraTest 
-    cameras.cpp 
+    camerasTest.cpp
+    cameras.cpp
 )
 
-# Link Polyscope
-target_link_libraries(cameraTest PRIVATE opencv)
+# 3. Include headers
+target_include_directories(cameraTest PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${OpenCV_INCLUDE_DIRS}
+)
+
+# 4. Link OpenCV libraries
+target_link_libraries(cameraTest PRIVATE 
+    ${OpenCV_LIBS}
+)
