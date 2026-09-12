@@ -32,3 +32,15 @@ One issue is with our grid based representation all nearby nodes are equally dis
 the breadth first search but it may come to a more optimal path. 
 
 The algorithm is able to avoid traps because falling into a trap would increase the cost to get to the end point , so it would avoid the trap for the final path.
+
+<br>
+
+## A* algorithm
+### Purpose
+This is an extention on Dijsktra's algorithm. This can make the algorithm better for your 
+
+### Explanation
+This is a beautiful and logical modification to Dijsktra's algorithm where we utelize a heuristic. What is a heuristic? This is just 
+a function that we can make whatever we want to add score or take away score, a modification usuallty done for A* is scoreing
+based on distances from target, so then the scores will favor closer nodes , or something like that, it can be anything you 
+want.
