@@ -1,0 +1,46 @@
+cmake_minimum_required(VERSION 3.14)
+project(ARKOV LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(FetchContent)
+
+# 1. Fetch Polyscope
+FetchContent_Declare(
+    polyscope
+    GIT_REPOSITORY https://github.com/nmwsharp/polyscope.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(polyscope)
+
+# 2. Fetch Unitree SDK 2
+FetchContent_Declare(
+    unilidar_sdk2
+    GIT_REPOSITORY https://github.com/unitreerobotics/unilidar_sdk2.git
+    GIT_TAG main
+)
+FetchContent_GetProperties(unilidar_sdk2)
+if(NOT unilidar_sdk2_POPULATED)
+    FetchContent_Populate(unilidar_sdk2)
+endif()
+
+# 3. Add executable
+add_executable(polyscope_lidar 
+    polyscope_lidar.cpp 
+    voxel_map.cpp
+)
+
+# 4. Include the exact folder where unitree_lidar_sdk.h lives
+target_include_directories(polyscope_lidar PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../types
+    ${unilidar_sdk2_SOURCE_DIR}/unitree_lidar_sdk/include
+)
+
+# 5. Link the exact aarch64 library for your Jetson AGX
+target_link_libraries(polyscope_lidar PRIVATE 
+    polyscope
+    pthread
+    ${unilidar_sdk2_SOURCE_DIR}/unitree_lidar_sdk/lib/aarch64/libunilidar_sdk2.a
+)
